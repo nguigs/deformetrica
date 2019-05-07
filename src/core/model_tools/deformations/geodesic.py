@@ -37,7 +37,7 @@ class Geodesic:
     ####################################################################################################################
 
     def __init__(self, dense_mode=default.dense_mode,
-                 kernel=default.deformation_kernel, shoot_kernel_type=None,
+                 kernel=default.deformation_kernel, shoot_kernel_type=None, use_svf=False,
                  t0=default.t0, concentration_of_time_points=default.concentration_of_time_points,
                  use_rk2_for_shoot=default.use_rk2_for_shoot, use_rk2_for_flow=default.use_rk2_for_flow):
 
@@ -51,12 +51,12 @@ class Geodesic:
         self.template_points_t0 = None
 
         self.backward_exponential = Exponential(
-            dense_mode=dense_mode,
+            dense_mode=dense_mode, use_svf=use_svf,
             kernel=kernel, shoot_kernel_type=shoot_kernel_type,
             use_rk2_for_shoot=use_rk2_for_shoot, use_rk2_for_flow=use_rk2_for_flow)
 
         self.forward_exponential = Exponential(
-            dense_mode=dense_mode,
+            dense_mode=dense_mode, use_svf=use_svf,
             kernel=kernel, shoot_kernel_type=shoot_kernel_type,
             use_rk2_for_shoot=use_rk2_for_shoot, use_rk2_for_flow=use_rk2_for_flow)
 

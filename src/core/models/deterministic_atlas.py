@@ -112,8 +112,7 @@ class DeterministicAtlas(AbstractStatisticalModel):
                  initial_momenta=default.initial_momenta,
                  freeze_momenta=default.freeze_momenta,
 
-                 gpu_mode=default.gpu_mode,
-                 process_per_gpu=default.process_per_gpu,
+                 use_svf=False,
 
                  **kwargs):
 
@@ -138,9 +137,8 @@ class DeterministicAtlas(AbstractStatisticalModel):
         # Deformation.
         self.exponential = Exponential(
             dense_mode=dense_mode,
-            kernel=kernel_factory.factory(deformation_kernel_type,
-                                          gpu_mode=gpu_mode,
-                                          kernel_width=deformation_kernel_width),
+            use_svf=use_svf,
+            kernel=kernel_factory.factory(deformation_kernel_type, deformation_kernel_width, device=deformation_kernel_device),
             shoot_kernel_type=shoot_kernel_type,
             number_of_time_points=number_of_time_points,
             use_rk2_for_shoot=use_rk2_for_shoot, use_rk2_for_flow=use_rk2_for_flow)

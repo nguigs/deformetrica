@@ -112,6 +112,9 @@ class DeterministicAtlas(AbstractStatisticalModel):
                  initial_momenta=default.initial_momenta,
                  freeze_momenta=default.freeze_momenta,
 
+                 gpu_mode=default.gpu_mode,
+                 process_per_gpu=default.process_per_gpu,
+
                  use_svf=False,
 
                  **kwargs):

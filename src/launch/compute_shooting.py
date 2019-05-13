@@ -29,6 +29,7 @@ def compute_shooting(template_specifications,
                      number_of_time_points=default.number_of_time_points,
                      use_rk2_for_shoot=default.use_rk2_for_shoot,
                      use_rk2_for_flow=default.use_rk2_for_flow,
+                     gpu_mode=default.gpu_mode,
                      output_dir=default.output_dir,use_svf=False, **kwargs
                      ):
     logger.info('[ compute_shooting function ]')

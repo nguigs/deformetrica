@@ -29,7 +29,7 @@ class Exponential:
     def __init__(self, dense_mode=default.dense_mode,
                  kernel=default.deformation_kernel,
                  shoot_kernel_type=None,
-                 use_svf = False,
+                 use_svf=True,
                  number_of_time_points=None,
                  initial_control_points=None, control_points_t=None,
                  initial_momenta=None, momenta_t=None,

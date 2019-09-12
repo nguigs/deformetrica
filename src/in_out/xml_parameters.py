@@ -63,6 +63,7 @@ def get_model_options(xml_parameters):
         'deformation_kernel_type': xml_parameters.deformation_kernel_type,
         'deformation_kernel_width': xml_parameters.deformation_kernel_width,
         'deformation_kernel_device': xml_parameters.deformation_kernel_device,
+        'use_svf': xml_parameters.use_svf,
         'number_of_time_points': xml_parameters.number_of_time_points,
         'concentration_of_time_points': xml_parameters.concentration_of_time_points,
         'use_rk2_for_shoot': xml_parameters.use_rk2_for_shoot,
@@ -148,6 +149,7 @@ class XmlParameters:
         self.deformation_kernel_width = 0
         self.deformation_kernel_type = 'torch'
         self.deformation_kernel_device = default.deformation_kernel_device
+        self.use_svf = default.use_svf
         self.number_of_time_points = default.number_of_time_points
         self.concentration_of_time_points = default.concentration_of_time_points
         self.number_of_sources = default.number_of_sources
@@ -398,6 +400,8 @@ class XmlParameters:
                             self._keops_is_used = True
                     elif model_xml_level2.tag.lower() == 'kernel-device':
                         self.deformation_kernel_device = model_xml_level2.text
+                    elif model_xml_level2.tag.lower() == 'use-svf':
+                        self.use_svf = model_xml_level2.text
                     elif model_xml_level2.tag.lower() == 'number-of-timepoints':
                         self.number_of_time_points = int(model_xml_level2.text)
                     elif model_xml_level2.tag.lower() == 'number-of-interpolation-points':

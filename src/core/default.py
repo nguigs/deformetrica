@@ -13,6 +13,8 @@ tensor_integer_type = utilities.get_torch_integer_type(dtype)
 # deformation_kernel = kernel_factory.factory(kernel_factory.Type.TORCH, kernel_width=1.)
 deformation_kernel = None
 
+use_svf = False
+
 output_dir = os.path.join(os.getcwd(), 'output')
 preprocessing_dir = os.path.join(os.getcwd(), 'preprocessing')
 state_file = None

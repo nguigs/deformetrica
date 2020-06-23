@@ -29,7 +29,7 @@ class Exponential:
     def __init__(self, dense_mode=default.dense_mode,
                  kernel=default.deformation_kernel,
                  shoot_kernel_type=None,
-                 use_svf=True,
+                 use_svf=False,
                  number_of_time_points=None,
                  initial_control_points=None, control_points_t=None,
                  initial_momenta=None, momenta_t=None,
@@ -202,7 +202,7 @@ class Exponential:
         self.control_points_t = []
         self.momenta_t = []
         if self.use_svf:
-            print('shooting with stationnary control points and momenta')
+            print('Shooting with SVF')
             self.control_points_t = [self.initial_control_points] * self.number_of_time_points
             self.momenta_t = [self.initial_momenta] * self.number_of_time_points
         else:

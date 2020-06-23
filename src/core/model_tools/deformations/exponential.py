@@ -38,7 +38,7 @@ class Exponential:
 
         self.dense_mode = dense_mode
         self.kernel = kernel
-
+        print('SVF mode:', use_svf)
         if shoot_kernel_type is not None:
             self.shoot_kernel = kernel_factory.factory(shoot_kernel_type, gpu_mode=kernel.gpu_mode, kernel_width=kernel.kernel_width)
         else:
@@ -202,7 +202,6 @@ class Exponential:
         self.control_points_t = []
         self.momenta_t = []
         if self.use_svf:
-            print('shooting with stationnary control points and momenta')
             self.control_points_t = [self.initial_control_points] * self.number_of_time_points
             self.momenta_t = [self.initial_momenta] * self.number_of_time_points
         else:

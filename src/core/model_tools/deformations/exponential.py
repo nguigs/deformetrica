@@ -6,6 +6,9 @@ import torch
 from core import default
 from in_out.array_readers_and_writers import *
 
+from core.model_tools.attachments.multi_object_attachment import MultiObjectAttachment
+from scipy.optimize import minimize
+
 import logging
 
 from support import utilities
@@ -316,8 +319,9 @@ class Exponential:
         # Optional initial orthogonalization ---------------------------------------------------------------------------
         norm_squared = self.get_norm_squared()
         if not is_orthogonal:
-            sp = self.scalar_product(self.control_points_t[initial_time_point], momenta_to_transport,
-                                     self.momenta_t[initial_time_point]) / norm_squared
+            sp = self.scalar_product(
+                self.control_points_t[initial_time_point], momenta_to_transport,
+                self.momenta_t[initial_time_point]) / norm_squared
             momenta_to_transport_orthogonal = momenta_to_transport - sp * self.momenta_t[initial_time_point]
             parallel_transport_t = [momenta_to_transport_orthogonal]
         else:
@@ -399,6 +403,43 @@ class Exponential:
             logger.warning(msg)
 
         return parallel_transport_t
+
+    def pole_ladder_transport(self, momenta_to_transport, initial_shoot, initial_time_point=0):
+        parallel_transport_t = [momenta_to_transport]
+
+        # Sanity checks ------------------------------------------------------------------------------------------------
+        assert not self.shoot_is_modified, "You want to parallel transport but the shoot was modified, please update."
+        assert self.use_rk4_for_shoot, "The shoot integration must be done with a fourth order numerical scheme in " \
+                                       "order to use pole ladder transport."
+        assert (momenta_to_transport.size() == self.initial_momenta.size())
+
+        # Special cases, where the transport is simply the identity ----------------------------------------------------
+        #       1) Nearly zero initial momenta yield no motion.
+        #       2) Nearly zero momenta to transport.
+        if (torch.norm(self.initial_momenta).detach().cpu().numpy() < 1e-6 or
+                torch.norm(momenta_to_transport).detach().cpu().numpy() < 1e-6):
+            parallel_transport_t = [momenta_to_transport] * (self.number_of_time_points - initial_time_point)
+            return parallel_transport_t
+
+        # Step sizes ---------------------------------------------------------------------------------------------------
+        h = 1. / (self.number_of_time_points - 1.)
+        shoot = self.rk4_step(
+            self.shoot_kernel, self.control_points_t[0], momenta_to_transport, h, return_mom=False)
+
+        for i in range(initial_time_point, self.number_of_time_points - 1):
+            mom = self.rk4_inverse(self.shoot_kernel, self.control_points_t[i], shoot, h)
+            shoot = self.rk4_step(self.shoot_kernel, self.control_points_t[i], -mom, h)
+
+        final_cp = self.rk4_step(
+            self.shoot_kernel, self.control_points_t[-1], self.momenta_t[-1], h / 2, return_mom=False)
+
+        transported_momenta = self.rk4_inverse(self.shoot_kernel, final_cp, shoot, h) / h
+        if (self.number_of_time_points - 1) % 2 == 1:
+            transported_momenta *= -1.
+
+        return final_cp, transported_momenta
+
+
 
     ####################################################################################################################
     ### Extension methods:
@@ -502,6 +543,65 @@ class Exponential:
                    mom - h * kernel.convolve_gradient(mid_mom, mid_cp)
         else:
             return cp + h * kernel.convolve(mid_cp, mid_cp, mid_mom)
+
+    @staticmethod
+    def symplectic_grad(kernel):
+        def vector(cp, mom):
+            return kernel.convolve(cp, cp, mom), - kernel.convolve_gradient(mom, cp)
+        return vector
+
+    @classmethod
+    def rk4_step(cls, kernel, cp, mom, h, return_mom=True):
+        """
+        perform a single mid-point rk4 step on the geodesic equation with initial cp and mom.
+        also used in pole ladder parallel transport.
+        return_mom: bool to know if the mom at time t+h is to be computed and returned
+        """
+        assert cp.device == mom.device, 'tensors must be on the same device, cp.device=' + str(
+            cp.device) + ', mom.device=' + str(mom.device)
+
+        k1, l1 = cls.symplectic_grad(kernel)(cp, mom)
+        cp_1 = cp + h / 2. * k1
+        mom_1 = mom + h / 2 * l1
+
+        k2, l2 = cls.symplectic_grad(kernel)(cp_1, mom_1)
+        cp_2 = cp + h / 2 * k2
+        mom_2 = mom + h / 2 * l2
+
+        k3, l3 = cls.symplectic_grad(kernel)(cp_2, mom_2)
+        cp_3 = cp + h * k3
+        mom_3 = mom + h * l3
+
+        k4, l4 = cls.symplectic_grad(kernel)(cp_3, mom_3)
+        cp_new = cp + h / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
+        mom_new = mom + h / 6 * (l1 + 2 * l2 + 2 * l3 + l4)
+        if return_mom:
+            return cp_new, mom_new
+        return cp_new
+
+    @classmethod
+    def rk4_inverse(cls, kernel, x, y, h):
+        x = x.double()
+        y = y.double()
+
+        def loss_and_grad(mom):
+            if isinstance(mom, np.ndarray):
+                mom = torch.from_numpy(mom)
+            mom = mom.reshape(x.shape)
+            mom_ = mom.clone().detach().requires_grad_(True)
+            shoot = cls.rk4_step(kernel, x, mom_, h, return_mom=False)
+            loss = torch.sum((shoot.contiguous().view(-1) - y.contiguous().view(-1)) ** 2)
+            loss.backward()
+            grad = mom_.grad.detach().cpu()
+            return loss.detach().cpu(), grad.numpy().flatten()
+
+        init_mom = torch.rand(*torch.flatten(x).shape)
+        res = minimize(
+            loss_and_grad, init_mom, method='L-BFGS-B', jac=True,
+            options={'disp': True, 'maxiter': 25})
+
+        tangent_vec = torch.Tensor(res.x).reshape(x.shape)
+        return tangent_vec
 
     # TODO. Wrap pytorch of an efficient C code ? Use keops ? Called ApplyH in PyCa. Check Numba as well.
     # @jit(parallel=True)

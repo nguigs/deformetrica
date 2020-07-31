@@ -170,3 +170,168 @@ def compute_parallel_transport(template_specifications,
             for k in range(len(objects_name))]
 
         template.write(output_dir, names, {key: value.detach().cpu().numpy() for key, value in parallel_data.items()})
+
+
+def compute_pole_ladder(template_specifications,
+                        dimension=default.dimension,
+                        tensor_scalar_type=default.tensor_scalar_type,
+                        tensor_integer_type=default.tensor_integer_type,
+                        deformation_kernel_type=default.deformation_kernel_type,
+                        deformation_kernel_width=default.deformation_kernel_width,
+                        shoot_kernel_type=None,
+                        initial_control_points=default.initial_control_points,
+                        initial_momenta=default.initial_momenta,
+                        initial_control_points_to_transport=default.initial_control_points_to_transport,
+                        initial_momenta_to_transport=default.initial_momenta_to_transport,
+                        tmin=default.tmin, tmax=default.tmax,
+                        dense_mode=default.dense_mode,
+                        concentration_of_time_points=default.concentration_of_time_points,
+                        t0=default.t0,
+                        number_of_time_points=default.number_of_time_points,
+                        use_rk2_for_shoot=default.use_rk2_for_shoot,
+                        use_rk2_for_flow=default.use_rk2_for_flow,
+                        gpu_mode=default.gpu_mode,
+                        output_dir=default.output_dir, **kwargs):
+
+    deformation_kernel = kernel_factory.factory(deformation_kernel_type, gpu_mode=gpu_mode, kernel_width=deformation_kernel_width)
+
+    """
+    Compute parallel transport
+    """
+    if initial_control_points is None:
+        raise RuntimeError("Please provide initial control points")
+    if initial_momenta is None:
+        raise RuntimeError("Please provide initial momenta")
+    if initial_momenta_to_transport is None:
+        raise RuntimeError("Please provide initial momenta to transport")
+
+    control_points = read_2D_array(initial_control_points)
+    initial_momenta = read_3D_array(initial_momenta)
+    initial_momenta_to_transport = read_3D_array(initial_momenta_to_transport)
+
+    if initial_control_points_to_transport is None:
+        logger.warning(
+            "initial-control-points-to-transport was not specified, "
+            "I am assuming they are the same as initial-control-points")
+        control_points_to_transport = control_points
+        need_to_project_initial_momenta = False
+    else:
+        control_points_to_transport = read_2D_array(initial_control_points_to_transport)
+        need_to_project_initial_momenta = True
+
+    device, _ = utilities.get_best_device(gpu_mode)
+
+    control_points = utilities.move_data(control_points, dtype=tensor_scalar_type, device=device)
+    control_points_to_transport = utilities.move_data(control_points_to_transport, dtype=tensor_scalar_type, device=device)
+    initial_momenta = utilities.move_data(initial_momenta, dtype=tensor_scalar_type, device=device)
+    initial_momenta_to_transport = utilities.move_data(initial_momenta_to_transport, dtype=tensor_scalar_type, device=device)
+
+    # We start by projecting the initial momenta if they are not carried at the reference progression control points.
+    if need_to_project_initial_momenta:
+        velocity = deformation_kernel.convolve(control_points, control_points_to_transport, initial_momenta_to_transport)
+        kernel_matrix = deformation_kernel.get_kernel_matrix(control_points)
+
+        """
+        The following code block needs to be done on cpu due to the high memory usage of the matrix inversion.
+        TODO: maybe use Keops Inv ?
+        """
+        velocity = utilities.move_data(velocity, dtype=tensor_scalar_type, device='cpu')  # TODO: could this be done on gpu ?
+        kernel_matrix = utilities.move_data(kernel_matrix, dtype=tensor_scalar_type, device='cpu')  # TODO: could this be done on gpu ?
+
+        cholesky_kernel_matrix = torch.potrf(kernel_matrix)
+        # cholesky_kernel_matrix = torch.Tensor(np.linalg.cholesky(kernel_matrix.data.numpy()).type_as(kernel_matrix))#Dirty fix if pytorch fails.
+        projected_momenta = torch.potrs(velocity, cholesky_kernel_matrix).squeeze().contiguous()
+
+    else:
+        projected_momenta = initial_momenta_to_transport
+
+    """
+    Re-send data to device depending on gpu_mode
+    """
+    device, _ = utilities.get_best_device(gpu_mode)
+    projected_momenta = utilities.move_data(projected_momenta, dtype=tensor_scalar_type, device=device)
+
+    """
+    Second half of the code.
+    """
+
+    objects_list, objects_name, objects_name_extension, _, _ = create_template_metadata(template_specifications, dimension, gpu_mode=gpu_mode)
+    template = DeformableMultiObject(objects_list)
+
+    template_points = template.get_points()
+    template_points = {key: utilities.move_data(value, dtype=tensor_scalar_type, device=device) for key, value in template_points.items()}
+
+    template_data = template.get_data()
+    template_data = {key: utilities.move_data(value, dtype=tensor_scalar_type, device=device) for key, value in template_data.items()}
+
+    # Compute first midpoint
+    h = 1 / (number_of_time_points - 1)
+    mid_cp, mid_mom = Exponential.rk4_step(deformation_kernel, control_points, initial_momenta, h / 2)
+    initial_shoot = Exponential.rk4_step(deformation_kernel, control_points, projected_momenta, h)
+
+    geodesic = Geodesic(dense_mode=dense_mode,
+                        concentration_of_time_points=concentration_of_time_points, t0=t0,
+                        kernel=deformation_kernel, shoot_kernel_type=shoot_kernel_type,
+                        use_rk2_for_shoot=True, use_rk2_for_flow=use_rk2_for_flow)
+
+    # Those are mandatory parameters.
+    assert math.fabs(tmin) != float("inf"), "Please specify a minimum time for the geodesic trajectory"
+    assert math.fabs(tmax) != float("inf"), "Please specify a maximum time for the geodesic trajectory"
+
+    geodesic.set_tmin(tmin + h / 2)
+    geodesic.set_tmax(tmax - h / 2)
+    geodesic.forward_exponential.number_of_time_points = number_of_time_points
+    if t0 is None:
+        geodesic.set_t0(geodesic.tmin)
+    else:
+        geodesic.set_t0(t0)
+
+    geodesic.set_momenta_t0(mid_mom)
+    geodesic.set_control_points_t0(mid_cp)
+    geodesic.set_template_points_t0(mid_mom)
+    geodesic.update()
+
+    # We write the flow of the geodesic
+    geodesic.write("Regression", objects_name, objects_name_extension, template, template_data, output_dir=output_dir)
+
+    # Now we transport!
+    final_cp, transported_mom = geodesic.forward_exponential.pole_ladder_transport(projected_momenta, initial_shoot)
+
+    # Getting trajectory caracteristics:
+    times = geodesic.get_times()
+    write_3D_array(transported_mom.detach().cpu().numpy(), output_dir, "transported_momenta")
+    write_2D_array(final_cp, output_dir, "ControlPoints_tp_{0:d}__age_{1:.2f}.txt".format(len(times), times[-1]))
+
+    control_points_traj = geodesic.get_control_points_trajectory()
+    momenta_traj = geodesic.get_momenta_trajectory()
+
+    exponential = Exponential(dense_mode=dense_mode,
+                              kernel=deformation_kernel, shoot_kernel_type=shoot_kernel_type,
+                              number_of_time_points=number_of_time_points,
+                              use_rk2_for_shoot=use_rk2_for_shoot, use_rk2_for_flow=use_rk2_for_flow)
+
+    # We save the parallel trajectory
+    for i, (time, cp, mom, transported_mom) in enumerate(
+            zip(times, control_points_traj, momenta_traj, parallel_transport_trajectory)):
+        # Writing the momenta/cps
+        write_2D_array(cp.detach().cpu().numpy(), output_dir, "ControlPoints_tp_{0:d}__age_{1:.2f}.txt".format(i, time))
+        write_3D_array(mom.detach().cpu().numpy(), output_dir, "Momenta_tp_{0:d}__age_{1:.2f}.txt".format(i, time))
+        write_3D_array(transported_mom.detach().cpu().numpy(), output_dir,
+                       "Transported_Momenta_tp_{0:d}__age_{1:.2f}.txt".format(i, time))
+
+        deformed_points = geodesic.get_template_points(time)
+
+        # Shooting from the geodesic:
+        exponential.set_initial_template_points(deformed_points)
+        exponential.set_initial_control_points(cp)
+        exponential.set_initial_momenta(transported_mom)
+        exponential.update()
+
+        parallel_points = exponential.get_template_points()
+        parallel_data = template.get_deformed_data(parallel_points, template_data)
+
+        names = [
+            objects_name[k] + "_parallel_curve_tp_{0:d}__age_{1:.2f}".format(i, time) + objects_name_extension[k]
+            for k in range(len(objects_name))]
+
+        template.write(output_dir, names, {key: value.detach().cpu().numpy() for key, value in parallel_data.items()})

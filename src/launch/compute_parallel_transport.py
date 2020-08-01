@@ -172,10 +172,7 @@ def compute_parallel_transport(template_specifications,
         template.write(output_dir, names, {key: value.detach().cpu().numpy() for key, value in parallel_data.items()})
 
 
-def compute_pole_ladder(template_specifications,
-                        dimension=default.dimension,
-                        tensor_scalar_type=default.tensor_scalar_type,
-                        tensor_integer_type=default.tensor_integer_type,
+def compute_pole_ladder(tensor_scalar_type=default.tensor_scalar_type,
                         deformation_kernel_type=default.deformation_kernel_type,
                         deformation_kernel_width=default.deformation_kernel_width,
                         shoot_kernel_type=None,
@@ -188,7 +185,6 @@ def compute_pole_ladder(template_specifications,
                         concentration_of_time_points=default.concentration_of_time_points,
                         t0=default.t0,
                         number_of_time_points=default.number_of_time_points,
-                        use_rk2_for_shoot=default.use_rk2_for_shoot,
                         use_rk2_for_flow=default.use_rk2_for_flow,
                         gpu_mode=default.gpu_mode,
                         output_dir=default.output_dir, **kwargs):
@@ -238,9 +234,9 @@ def compute_pole_ladder(template_specifications,
         velocity = utilities.move_data(velocity, dtype=tensor_scalar_type, device='cpu')  # TODO: could this be done on gpu ?
         kernel_matrix = utilities.move_data(kernel_matrix, dtype=tensor_scalar_type, device='cpu')  # TODO: could this be done on gpu ?
 
-        cholesky_kernel_matrix = torch.potrf(kernel_matrix)
+        cholesky_kernel_matrix = torch.cholesky(kernel_matrix)
         # cholesky_kernel_matrix = torch.Tensor(np.linalg.cholesky(kernel_matrix.data.numpy()).type_as(kernel_matrix))#Dirty fix if pytorch fails.
-        projected_momenta = torch.potrs(velocity, cholesky_kernel_matrix).squeeze().contiguous()
+        projected_momenta = torch.cholesky_solve(velocity, cholesky_kernel_matrix).squeeze().contiguous()
 
     else:
         projected_momenta = initial_momenta_to_transport
@@ -255,19 +251,23 @@ def compute_pole_ladder(template_specifications,
     Second half of the code.
     """
 
-    objects_list, objects_name, objects_name_extension, _, _ = create_template_metadata(template_specifications, dimension, gpu_mode=gpu_mode)
-    template = DeformableMultiObject(objects_list)
+    # objects_list, objects_name, objects_name_extension, _, _ = create_template_metadata(template_specifications, dimension, gpu_mode=gpu_mode)
+    # template = DeformableMultiObject(objects_list)
 
-    template_points = template.get_points()
-    template_points = {key: utilities.move_data(value, dtype=tensor_scalar_type, device=device) for key, value in template_points.items()}
-
-    template_data = template.get_data()
-    template_data = {key: utilities.move_data(value, dtype=tensor_scalar_type, device=device) for key, value in template_data.items()}
+    # template_points = template.get_points()
+    # template_points = {
+    #     key: utilities.move_data(
+    #         value, dtype=tensor_scalar_type, device=device) for key, value in template_points.items()}
+    #
+    # template_data = template.get_data()
+    # template_data = {
+    #     key: utilities.move_data(
+    #         value, dtype=tensor_scalar_type, device=device) for key, value in template_data.items()}
 
     # Compute first midpoint
     h = 1 / (number_of_time_points - 1)
     mid_cp, mid_mom = Exponential.rk4_step(deformation_kernel, control_points, initial_momenta, h / 2)
-    initial_shoot = Exponential.rk4_step(deformation_kernel, control_points, projected_momenta, h)
+    initial_shoot, _ = Exponential.rk4_step(deformation_kernel, control_points, projected_momenta, h)
 
     geodesic = Geodesic(dense_mode=dense_mode,
                         concentration_of_time_points=concentration_of_time_points, t0=t0,
@@ -288,11 +288,10 @@ def compute_pole_ladder(template_specifications,
 
     geodesic.set_momenta_t0(mid_mom)
     geodesic.set_control_points_t0(mid_cp)
-    geodesic.set_template_points_t0(mid_mom)
     geodesic.update()
 
-    # We write the flow of the geodesic
-    geodesic.write("Regression", objects_name, objects_name_extension, template, template_data, output_dir=output_dir)
+    # # We write the flow of the geodesic
+    # geodesic.write("Regression", objects_name, objects_name_extension, template, template_data, output_dir=output_dir)
 
     # Now we transport!
     final_cp, transported_mom = geodesic.forward_exponential.pole_ladder_transport(projected_momenta, initial_shoot)
@@ -301,37 +300,4 @@ def compute_pole_ladder(template_specifications,
     times = geodesic.get_times()
     write_3D_array(transported_mom.detach().cpu().numpy(), output_dir, "transported_momenta")
     write_2D_array(final_cp, output_dir, "ControlPoints_tp_{0:d}__age_{1:.2f}.txt".format(len(times), times[-1]))
-
-    control_points_traj = geodesic.get_control_points_trajectory()
-    momenta_traj = geodesic.get_momenta_trajectory()
-
-    exponential = Exponential(dense_mode=dense_mode,
-                              kernel=deformation_kernel, shoot_kernel_type=shoot_kernel_type,
-                              number_of_time_points=number_of_time_points,
-                              use_rk2_for_shoot=use_rk2_for_shoot, use_rk2_for_flow=use_rk2_for_flow)
-
-    # We save the parallel trajectory
-    for i, (time, cp, mom, transported_mom) in enumerate(
-            zip(times, control_points_traj, momenta_traj, parallel_transport_trajectory)):
-        # Writing the momenta/cps
-        write_2D_array(cp.detach().cpu().numpy(), output_dir, "ControlPoints_tp_{0:d}__age_{1:.2f}.txt".format(i, time))
-        write_3D_array(mom.detach().cpu().numpy(), output_dir, "Momenta_tp_{0:d}__age_{1:.2f}.txt".format(i, time))
-        write_3D_array(transported_mom.detach().cpu().numpy(), output_dir,
-                       "Transported_Momenta_tp_{0:d}__age_{1:.2f}.txt".format(i, time))
-
-        deformed_points = geodesic.get_template_points(time)
-
-        # Shooting from the geodesic:
-        exponential.set_initial_template_points(deformed_points)
-        exponential.set_initial_control_points(cp)
-        exponential.set_initial_momenta(transported_mom)
-        exponential.update()
-
-        parallel_points = exponential.get_template_points()
-        parallel_data = template.get_deformed_data(parallel_points, template_data)
-
-        names = [
-            objects_name[k] + "_parallel_curve_tp_{0:d}__age_{1:.2f}".format(i, time) + objects_name_extension[k]
-            for k in range(len(objects_name))]
-
-        template.write(output_dir, names, {key: value.detach().cpu().numpy() for key, value in parallel_data.items()})
+    return final_cp, transported_mom

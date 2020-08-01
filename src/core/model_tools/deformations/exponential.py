@@ -409,8 +409,6 @@ class Exponential:
 
         # Sanity checks ------------------------------------------------------------------------------------------------
         assert not self.shoot_is_modified, "You want to parallel transport but the shoot was modified, please update."
-        assert self.use_rk4_for_shoot, "The shoot integration must be done with a fourth order numerical scheme in " \
-                                       "order to use pole ladder transport."
         assert (momenta_to_transport.size() == self.initial_momenta.size())
 
         # Special cases, where the transport is simply the identity ----------------------------------------------------
@@ -423,17 +421,16 @@ class Exponential:
 
         # Step sizes ---------------------------------------------------------------------------------------------------
         h = 1. / (self.number_of_time_points - 1.)
-        shoot = self.rk4_step(
-            self.shoot_kernel, self.control_points_t[0], momenta_to_transport, h, return_mom=False)
+        shoot = initial_shoot
 
         for i in range(initial_time_point, self.number_of_time_points - 1):
             mom = self.rk4_inverse(self.shoot_kernel, self.control_points_t[i], shoot, h)
-            shoot = self.rk4_step(self.shoot_kernel, self.control_points_t[i], -mom, h)
+            shoot = self.rk4_step(self.shoot_kernel, self.control_points_t[i], -mom, h, return_mom=False)
 
         final_cp = self.rk4_step(
             self.shoot_kernel, self.control_points_t[-1], self.momenta_t[-1], h / 2, return_mom=False)
 
-        transported_momenta = self.rk4_inverse(self.shoot_kernel, final_cp, shoot, h) / h
+        transported_momenta = self.rk4_inverse(self.shoot_kernel, final_cp, shoot, h)
         if (self.number_of_time_points - 1) % 2 == 1:
             transported_momenta *= -1.
 
@@ -598,7 +595,7 @@ class Exponential:
         init_mom = torch.rand(*torch.flatten(x).shape)
         res = minimize(
             loss_and_grad, init_mom, method='L-BFGS-B', jac=True,
-            options={'disp': True, 'maxiter': 25})
+            options={'disp': False, 'maxiter': 25}, tol=1e-14)
 
         tangent_vec = torch.Tensor(res.x).reshape(x.shape)
         return tangent_vec

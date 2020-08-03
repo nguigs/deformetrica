@@ -404,26 +404,12 @@ class Exponential:
 
         return parallel_transport_t
 
-    def pole_ladder_transport(self, momenta_to_transport, initial_shoot, initial_time_point=0):
-        parallel_transport_t = [momenta_to_transport]
-
-        # Sanity checks ------------------------------------------------------------------------------------------------
-        assert not self.shoot_is_modified, "You want to parallel transport but the shoot was modified, please update."
-        assert (momenta_to_transport.size() == self.initial_momenta.size())
-
-        # Special cases, where the transport is simply the identity ----------------------------------------------------
-        #       1) Nearly zero initial momenta yield no motion.
-        #       2) Nearly zero momenta to transport.
-        if (torch.norm(self.initial_momenta).detach().cpu().numpy() < 1e-6 or
-                torch.norm(momenta_to_transport).detach().cpu().numpy() < 1e-6):
-            parallel_transport_t = [momenta_to_transport] * (self.number_of_time_points - initial_time_point)
-            return parallel_transport_t
-
+    def pole_ladder_transport(self, initial_shoot, initial_time_point=0):
         # Step sizes ---------------------------------------------------------------------------------------------------
-        h = 1. / (self.number_of_time_points - 1.)
+        h = 1. / self.number_of_time_points
         shoot = initial_shoot
 
-        for i in range(initial_time_point, self.number_of_time_points - 1):
+        for i in range(initial_time_point, self.number_of_time_points):
             mom = self.rk4_inverse(self.shoot_kernel, self.control_points_t[i], shoot, h)
             shoot = self.rk4_step(self.shoot_kernel, self.control_points_t[i], -mom, h, return_mom=False)
 
@@ -431,7 +417,7 @@ class Exponential:
             self.shoot_kernel, self.control_points_t[-1], self.momenta_t[-1], h / 2, return_mom=False)
 
         transported_momenta = self.rk4_inverse(self.shoot_kernel, final_cp, shoot, h)
-        if (self.number_of_time_points - 1) % 2 == 1:
+        if self.number_of_time_points % 2 == 1:
             transported_momenta *= -1.
 
         return final_cp, transported_momenta

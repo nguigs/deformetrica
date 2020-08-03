@@ -82,9 +82,9 @@ def compute_parallel_transport(template_specifications,
         velocity = utilities.move_data(velocity, dtype=tensor_scalar_type, device='cpu')  # TODO: could this be done on gpu ?
         kernel_matrix = utilities.move_data(kernel_matrix, dtype=tensor_scalar_type, device='cpu')  # TODO: could this be done on gpu ?
 
-        cholesky_kernel_matrix = torch.potrf(kernel_matrix)
+        cholesky_kernel_matrix = torch.cholesky(kernel_matrix)
         # cholesky_kernel_matrix = torch.Tensor(np.linalg.cholesky(kernel_matrix.data.numpy()).type_as(kernel_matrix))#Dirty fix if pytorch fails.
-        projected_momenta = torch.potrs(velocity, cholesky_kernel_matrix).squeeze().contiguous()
+        projected_momenta = torch.cholesky_solve(velocity, cholesky_kernel_matrix).squeeze().contiguous()
 
     else:
         projected_momenta = initial_momenta_to_transport
@@ -267,7 +267,8 @@ def compute_pole_ladder(tensor_scalar_type=default.tensor_scalar_type,
     # Compute first midpoint
     h = 1 / (number_of_time_points - 1)
     mid_cp, mid_mom = Exponential.rk4_step(deformation_kernel, control_points, initial_momenta, h / 2)
-    initial_shoot, _ = Exponential.rk4_step(deformation_kernel, control_points, projected_momenta, h)
+    initial_shoot, _ = Exponential.rk4_step(
+        deformation_kernel, control_points_to_transport, initial_momenta_to_transport, h)
 
     geodesic = Geodesic(dense_mode=dense_mode,
                         concentration_of_time_points=concentration_of_time_points, t0=t0,
@@ -294,10 +295,9 @@ def compute_pole_ladder(tensor_scalar_type=default.tensor_scalar_type,
     # geodesic.write("Regression", objects_name, objects_name_extension, template, template_data, output_dir=output_dir)
 
     # Now we transport!
-    final_cp, transported_mom = geodesic.forward_exponential.pole_ladder_transport(projected_momenta, initial_shoot)
-
-    # Getting trajectory caracteristics:
-    times = geodesic.get_times()
-    write_3D_array(transported_mom.detach().cpu().numpy(), output_dir, "transported_momenta")
-    write_2D_array(final_cp, output_dir, "ControlPoints_tp_{0:d}__age_{1:.2f}.txt".format(len(times), times[-1]))
+    final_cp, transported_mom = geodesic.forward_exponential.pole_ladder_transport(initial_shoot)
+    print(geodesic.get_times())
+    # write results:
+    write_3D_array(transported_mom.detach().cpu().numpy(), output_dir, "transported_momenta.txt")
+    write_2D_array(final_cp, output_dir, "final_cp.txt")
     return final_cp, transported_mom

@@ -578,10 +578,10 @@ class Exponential:
             grad = mom_.grad.detach().cpu()
             return loss.detach().cpu(), grad.numpy().flatten()
 
-        init_mom = torch.rand(*torch.flatten(x).shape)
+        init_mom = torch.rand(*torch.flatten(x).shape).numpy()
         res = minimize(
             loss_and_grad, init_mom, method='L-BFGS-B', jac=True,
-            options={'disp': False, 'maxiter': 25}, tol=1e-14)
+            options={'disp': True, 'maxiter': 50}, tol=1e-14)
 
         tangent_vec = torch.Tensor(res.x).reshape(x.shape)
         return tangent_vec

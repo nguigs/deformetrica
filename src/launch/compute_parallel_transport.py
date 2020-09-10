@@ -268,7 +268,7 @@ def compute_pole_ladder(tensor_scalar_type=default.tensor_scalar_type,
     h = 1 / (number_of_time_points - 1)
     mid_cp, mid_mom = Exponential.rk4_step(deformation_kernel, control_points, initial_momenta, h / 2)
     initial_shoot, _ = Exponential.rk4_step(
-        deformation_kernel, control_points_to_transport, initial_momenta_to_transport, h)
+        deformation_kernel, control_points, projected_momenta, h)
 
     geodesic = Geodesic(dense_mode=dense_mode,
                         concentration_of_time_points=concentration_of_time_points, t0=t0,
@@ -296,7 +296,7 @@ def compute_pole_ladder(tensor_scalar_type=default.tensor_scalar_type,
 
     # Now we transport!
     final_cp, transported_mom = geodesic.forward_exponential.pole_ladder_transport(initial_shoot)
-    print(geodesic.get_times())
+
     # write results:
     write_3D_array(transported_mom.detach().cpu().numpy(), output_dir, "transported_momenta.txt")
     write_2D_array(final_cp, output_dir, "final_cp.txt")

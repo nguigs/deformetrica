@@ -130,10 +130,11 @@ class DeterministicAtlas(AbstractStatisticalModel):
 
         # Declare model structure.
         self.fixed_effects['template_data'] = None
+        self.fixed_effects['initial_template'] = None
         self.fixed_effects['control_points'] = None
         self.fixed_effects['momenta'] = None
 
-        self.freeze_template = freeze_template
+        self.freeze_template = False
         self.freeze_control_points = freeze_control_points
         self.freeze_momenta = freeze_momenta
 
@@ -167,6 +168,7 @@ class DeterministicAtlas(AbstractStatisticalModel):
 
         # Template data.
         self.fixed_effects['template_data'] = self.template.get_data()
+        self.fixed_effects['initial_template'] = self.template.get_data()
 
         # Control points.
         self.fixed_effects['control_points'] = initialize_control_points(
@@ -360,6 +362,7 @@ class DeterministicAtlas(AbstractStatisticalModel):
         deformed_data = template.get_deformed_data(deformed_points, template_data)
         attachment = -multi_object_attachment.compute_weighted_distance(deformed_data, template, deformable_objects,
                                                                         objects_noise_variance)
+
         regularity = -exponential.get_norm_squared()
 
         assert torch.device(
@@ -432,6 +435,8 @@ class DeterministicAtlas(AbstractStatisticalModel):
             attachment += new_attachment
             regularity += new_regularity
 
+        # TODO: compute this properly, verify that gradient will be computed
+        attachment -= torch.norm(template_points - self.fixed_effects['initial_template'])
         # Compute gradient.
         return self._compute_gradients(attachment, regularity, template_data,
                                        self.freeze_template, template_points,

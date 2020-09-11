@@ -30,8 +30,8 @@ def compute_shooting(template_specifications,
                      use_rk2_for_shoot=default.use_rk2_for_shoot,
                      use_rk2_for_flow=default.use_rk2_for_flow,
                      gpu_mode=default.gpu_mode,
-                     output_dir=default.output_dir, **kwargs
-                     ):
+                     output_dir=default.output_dir,use_svf=False,
+                     write_adjoint_parameters=True, **kwargs):
     logger.info('[ compute_shooting function ]')
 
     """
@@ -70,7 +70,7 @@ def compute_shooting(template_specifications,
     template_data = {key: torch.from_numpy(value).type(tensor_scalar_type)
                      for key, value in template.get_data().items()}
 
-    geodesic = Geodesic(dense_mode=dense_mode,
+    geodesic = Geodesic(dense_mode=dense_mode, use_svf=use_svf,
                         concentration_of_time_points=concentration_of_time_points, t0=t0,
                         kernel=deformation_kernel, shoot_kernel_type=shoot_kernel_type,
                         use_rk2_for_shoot=use_rk2_for_shoot, use_rk2_for_flow=use_rk2_for_flow)
@@ -110,7 +110,7 @@ def compute_shooting(template_specifications,
         geodesic.update()
         names = [elt for elt in t_name]
         geodesic.write('Shooting', names, t_name_extension, template, template_data, output_dir,
-                       write_adjoint_parameters=True)
+                       write_adjoint_parameters=write_adjoint_parameters)
 
     # Several shootings to compute
     else:
@@ -119,4 +119,4 @@ def compute_shooting(template_specifications,
             geodesic.update()
             names = [elt for elt in t_name]
             geodesic.write('Shooting' + "_" + str(i), names, t_name_extension, template, template_data, output_dir,
-                           write_adjoint_parameters=True)
+                           write_adjoint_parameters=write_adjoint_parameters)

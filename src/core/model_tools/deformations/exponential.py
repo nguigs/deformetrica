@@ -32,6 +32,7 @@ class Exponential:
     def __init__(self, dense_mode=default.dense_mode,
                  kernel=default.deformation_kernel,
                  shoot_kernel_type=None,
+                 use_svf=False,
                  number_of_time_points=None,
                  initial_control_points=None, control_points_t=None,
                  initial_momenta=None, momenta_t=None,
@@ -40,7 +41,7 @@ class Exponential:
 
         self.dense_mode = dense_mode
         self.kernel = kernel
-
+        print('SVF mode:', use_svf)
         if shoot_kernel_type is not None:
             self.shoot_kernel = kernel_factory.factory(shoot_kernel_type, gpu_mode=kernel.gpu_mode, kernel_width=kernel.kernel_width)
         else:
@@ -69,6 +70,9 @@ class Exponential:
         # Wether to use a RK2 or a simple euler for shooting or flowing respectively.
         self.use_rk2_for_shoot = use_rk2_for_shoot
         self.use_rk2_for_flow = use_rk2_for_flow
+
+        self.use_svf = use_svf
+
         # Contains the inverse kernel matrices for the time points 1 to self.number_of_time_points
         # (ACHTUNG does not contain the initial matrix, it is not needed)
         self.cometric_matrices = {}
@@ -198,23 +202,29 @@ class Exponential:
         assert len(self.initial_momenta) > 0, "Momenta not initialized in shooting"
 
         # Integrate the Hamiltonian equations.
-        self.control_points_t = [self.initial_control_points]
-        self.momenta_t = [self.initial_momenta]
-
-        dt = 1.0 / float(self.number_of_time_points - 1)
-
-        if self.use_rk2_for_shoot:
-            for i in range(self.number_of_time_points - 1):
-                new_cp, new_mom = self._rk2_step(self.shoot_kernel, self.control_points_t[i], self.momenta_t[i], dt,
-                                                 return_mom=True)
-                self.control_points_t.append(new_cp)
-                self.momenta_t.append(new_mom)
-
+        self.control_points_t = []
+        self.momenta_t = []
+        if self.use_svf:
+            self.control_points_t = [self.initial_control_points] * self.number_of_time_points
+            self.momenta_t = [self.initial_momenta] * self.number_of_time_points
         else:
-            for i in range(self.number_of_time_points - 1):
-                new_cp, new_mom = self._euler_step(self.shoot_kernel, self.control_points_t[i], self.momenta_t[i], dt)
-                self.control_points_t.append(new_cp)
-                self.momenta_t.append(new_mom)
+            self.momenta_t.append(self.initial_momenta)
+            self.control_points_t.append(self.initial_control_points)
+
+            dt = 1.0 / float(self.number_of_time_points - 1)
+
+            if self.use_rk2_for_shoot:
+                for i in range(self.number_of_time_points - 1):
+                    new_cp, new_mom = self._rk2_step(self.shoot_kernel, self.control_points_t[i], self.momenta_t[i], dt,
+                                                     return_mom=True)
+                    self.control_points_t.append(new_cp)
+                    self.momenta_t.append(new_mom)
+
+            else:
+                for i in range(self.number_of_time_points - 1):
+                    new_cp, new_mom = self._euler_step(self.shoot_kernel, self.control_points_t[i], self.momenta_t[i], dt)
+                    self.control_points_t.append(new_cp)
+                    self.momenta_t.append(new_mom)
 
         # Correctly resets the attribute flag.
         self.shoot_is_modified = False

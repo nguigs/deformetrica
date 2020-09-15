@@ -17,6 +17,7 @@ from core.models.affine_atlas import AffineAtlas
 from core.models.bayesian_atlas import BayesianAtlas
 from core.models.deterministic_atlas import DeterministicAtlas
 from core.models.geodesic_regression import GeodesicRegression
+from core.models.spline_regression import SplineRegression
 from core.models.longitudinal_atlas import LongitudinalAtlas
 from in_out.dataset_functions import create_dataset
 from in_out.deformable_object_reader import DeformableObjectReader
@@ -370,6 +371,42 @@ class Deformetrica:
 
         # Instantiate model.
         statistical_model = GeodesicRegression(template_specifications, **model_options)
+        statistical_model.initialize_noise_variance(dataset)
+
+        # Instantiate estimator.
+        estimator = self.__instantiate_estimator(statistical_model, dataset, estimator_options, default=ScipyOptimize)
+
+        try:
+            # Launch.
+            self.__launch_estimator(estimator, write_output)
+        finally:
+            statistical_model.cleanup()
+
+        return statistical_model
+
+    def estimate_spline_regression(
+            self, template_specifications, dataset_specifications,
+            model_options={}, estimator_options={}, write_output=True):
+        """ Construct a shape trajectory that is as close as possible to the given targets at the given times.
+
+        :param dict template_specifications: Dictionary containing the description of the task that is to be performed (such as estimating a registration, an atlas, ...)
+                as well as some hyper-parameters for the objects and the deformations used.
+        :param dict dataset_specifications: Dictionary containing the paths to the input objects from which a statistical model will be estimated.
+        :param dict model_options: Dictionary containing details about the model that is to be run.
+        :param dict estimator_options: Dictionary containing details about the optimization method. This will be passed to the optimizer's constructor.
+        :param bool write_output: Boolean that defines is output files will be written to disk.
+        """
+        # Check and completes the input parameters.
+        template_specifications, model_options, estimator_options = self.further_initialization(
+            'Regression', template_specifications, model_options, dataset_specifications, estimator_options)
+
+        # Instantiate dataset.
+        dataset = create_dataset(template_specifications,
+                                 dimension=model_options['dimension'], **dataset_specifications)
+        assert (dataset.is_time_series()), "Cannot estimate a spline regression from a non-time-series dataset."
+
+        # Instantiate model.
+        statistical_model = SplineRegression(template_specifications, **model_options)
         statistical_model.initialize_noise_variance(dataset)
 
         # Instantiate estimator.

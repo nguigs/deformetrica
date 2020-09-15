@@ -111,7 +111,7 @@ class SplineRegression(GeodesicRegression):
         if not self.freeze_control_points:
             self.set_control_points(fixed_effects['control_points'])
         self.set_momenta(fixed_effects['momenta'])
-        self.set_fixed_effects(fixed_effects['external_forces'])
+        self.set_external_forces(fixed_effects['external_forces'])
 
     ####################################################################################################################
     # Public methods:

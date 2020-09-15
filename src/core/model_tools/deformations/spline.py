@@ -111,9 +111,8 @@ class Spline(Geodesic):
 
 class SplineEvolutionModel(Exponential):
 
-    def __init__(self, external_forces, **kwargs):
+    def __init__(self, **kwargs):
         super(SplineEvolutionModel, self).__init__(**kwargs)
-        self.external_forces = external_forces
 
     def set_external_forces(self, force):
         self.shoot_is_modified = True

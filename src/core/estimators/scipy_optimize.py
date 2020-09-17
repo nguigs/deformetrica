@@ -103,11 +103,14 @@ class ScipyOptimize(AbstractEstimator):
                                   options={
                                       'maxiter': self.max_iterations + 10,
                                       'maxls': self.max_line_search_iterations,
-                                      'ftol': self.convergence_tolerance,
+                                      'ftol': self.convergence_tolerance / 10,
+                                      'gtol': self.convergence_tolerance,
                                       # Number of previous gradients used to approximate the Hessian.
                                       'maxcor': self.memory_length,
                                       'disp': False
                                   })
+                grad_norm = np.sum(result['jac'] ** 2)
+                logger.info('>> Gradient at Termination: {}'.format(grad_norm))
                 msg = result.message.decode("utf-8")
                 if msg == 'ABNORMAL_TERMINATION_IN_LNSRCH':
                     logger.info('>> Number of line search loops exceeded. Stopping.')

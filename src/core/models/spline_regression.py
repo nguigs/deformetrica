@@ -41,6 +41,7 @@ class SplineRegression(GeodesicRegression):
                  initial_control_points=default.initial_control_points,
                  freeze_control_points=default.freeze_control_points,
                  initial_cp_spacing=default.initial_cp_spacing,
+                 freeze_external_forces=False,
 
                  initial_momenta=default.initial_momenta,
 
@@ -70,6 +71,7 @@ class SplineRegression(GeodesicRegression):
             initial_momenta=initial_momenta, **kwargs)
 
         # Deformation.
+        self.name = 'SplineRegression'
         self.geodesic = Spline(
             dense_mode=dense_mode,
             kernel=kernel_factory.factory(
@@ -81,6 +83,7 @@ class SplineRegression(GeodesicRegression):
         # External Forces.
         self.fixed_effects['external_forces'] = torch.zeros(
             concentration_of_time_points, self.number_of_control_points, self.dimension)
+        self.freeze_external_forces = freeze_external_forces
 
     ####################################################################################################################
     # Encapsulation methods:
@@ -101,7 +104,8 @@ class SplineRegression(GeodesicRegression):
         if not self.freeze_control_points:
             out['control_points'] = self.fixed_effects['control_points']
         out['momenta'] = self.fixed_effects['momenta']
-        out['external_forces'] = self.fixed_effects['external_forces']
+        if not self.freeze_external_forces:
+            out['external_forces'] = self.fixed_effects['external_forces']
         return out
 
     def set_fixed_effects(self, fixed_effects):
@@ -111,7 +115,8 @@ class SplineRegression(GeodesicRegression):
         if not self.freeze_control_points:
             self.set_control_points(fixed_effects['control_points'])
         self.set_momenta(fixed_effects['momenta'])
-        self.set_external_forces(fixed_effects['external_forces'])
+        if not self.freeze_external_forces:
+            self.set_external_forces(fixed_effects['external_forces'])
 
     ####################################################################################################################
     # Public methods:
@@ -158,9 +163,11 @@ class SplineRegression(GeodesicRegression):
                         gradient['landmark_points'].detach())
 
             # Control points and momenta.
-            if not self.freeze_control_points: gradient['control_points'] = control_points.grad
+            if not self.freeze_control_points:
+                gradient['control_points'] = control_points.grad
+            if not self.freeze_external_forces:
+                gradient['external_forces'] = external_forces.grad
             gradient['momenta'] = momenta.grad
-            gradient['external_forces'] = external_forces.grad
 
             # Convert the gradient back to numpy.
             gradient = {key: value.data.cpu().numpy() for key, value in gradient.items()}
@@ -247,7 +254,8 @@ class SplineRegression(GeodesicRegression):
         # External Forces
         external_forces = self.fixed_effects['external_forces']
         external_forces = utilities.move_data(
-            external_forces, dtype=self.tensor_scalar_type, requires_grad=with_grad, device=device)
+            external_forces, dtype=self.tensor_scalar_type,
+            requires_grad=(not self.freeze_external_forces and with_grad), device=device)
 
         return template_data, template_points, control_points, momenta, external_forces
 

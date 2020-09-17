@@ -280,8 +280,8 @@ class SplineRegression(GeodesicRegression):
 
         # Write --------------------------------------------------------------------------------------------------------
         # Geodesic flow.
-        self.geodesic.write(self.name, self.objects_name, self.objects_name_extension, self.template, template_data,
-                            output_dir, write_adjoint_parameters)
+        # self.geodesic.write(self.name, self.objects_name, self.objects_name_extension, self.template, template_data,
+        #                     output_dir, write_adjoint_parameters)
 
         # Model predictions.
         if dataset is not None:

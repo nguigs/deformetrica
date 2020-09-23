@@ -314,4 +314,6 @@ class SplineRegression(GeodesicRegression):
         write_3D_array(self.get_momenta(), output_dir, self.name + "__EstimatedParameters__Momenta.txt")
 
         # External Forces
-        write_3D_array(self.get_external_forces(), output_dir, self.name + "__EstimatedParameters__ExternalForces.txt")
+        if not self.freeze_external_forces:
+            write_3D_array(
+                self.get_external_forces(), output_dir, self.name + "__EstimatedParameters__ExternalForces.txt")

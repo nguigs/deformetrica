@@ -41,7 +41,7 @@ class Exponential:
 
         self.dense_mode = dense_mode
         self.kernel = kernel
-        print('SVF mode:', use_svf)
+
         if shoot_kernel_type is not None:
             self.shoot_kernel = kernel_factory.factory(shoot_kernel_type, gpu_mode=kernel.gpu_mode, kernel_width=kernel.kernel_width)
         else:
@@ -142,9 +142,6 @@ class Exponential:
     def set_initial_momenta(self, mom):
         self.shoot_is_modified = True
         self.initial_momenta = mom
-
-    def get_initial_momenta(self):
-        return self.initial_momenta
 
     def scalar_product(self, cp, mom1, mom2):
         """

@@ -100,6 +100,7 @@ class DeterministicAtlas(AbstractStatisticalModel):
                  shoot_kernel_type=default.shoot_kernel_type,
                  number_of_time_points=default.number_of_time_points,
                  use_rk2_for_shoot=default.use_rk2_for_shoot, use_rk2_for_flow=default.use_rk2_for_flow,
+                 use_rk4_for_shoot=False,
 
                  freeze_template=default.freeze_template,
                  use_sobolev_gradient=default.use_sobolev_gradient,
@@ -145,7 +146,7 @@ class DeterministicAtlas(AbstractStatisticalModel):
                                           gpu_mode=gpu_mode,
                                           kernel_width=deformation_kernel_width),
             shoot_kernel_type=shoot_kernel_type,
-            number_of_time_points=number_of_time_points,
+            number_of_time_points=number_of_time_points, use_rk4_for_shoot=use_rk4_for_shoot,
             use_rk2_for_shoot=use_rk2_for_shoot, use_rk2_for_flow=use_rk2_for_flow)
 
         # Template.

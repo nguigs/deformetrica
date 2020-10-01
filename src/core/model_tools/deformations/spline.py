@@ -23,7 +23,7 @@ class Spline(Geodesic):
     def __init__(self, dense_mode=default.dense_mode, use_rk2_for_flow=default.use_rk2_for_flow,
                  kernel=default.deformation_kernel, shoot_kernel_type=None, **kwargs):
         super(Spline, self).__init__(
-            dense_mode=dense_mode, use_rk2_for_flow=default.use_rk2_for_flow,
+            dense_mode=dense_mode, use_rk2_for_flow=use_rk2_for_flow,
             kernel=kernel, shoot_kernel_type=shoot_kernel_type, **kwargs)
 
         self.external_forces = None

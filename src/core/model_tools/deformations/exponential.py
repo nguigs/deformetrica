@@ -36,7 +36,7 @@ class Exponential:
                  number_of_time_points=None,
                  initial_control_points=None, control_points_t=None,
                  initial_momenta=None, momenta_t=None,
-                 initial_template_points=None, template_points_t=None,
+                 initial_template_points=None, template_points_t=None, use_rk4_for_shoot=False,
                  shoot_is_modified=True, flow_is_modified=True, use_rk2_for_shoot=False, use_rk2_for_flow=False):
 
         self.dense_mode = dense_mode
@@ -69,6 +69,7 @@ class Exponential:
         self.flow_is_modified = flow_is_modified
         # Wether to use a RK2 or a simple euler for shooting or flowing respectively.
         self.use_rk2_for_shoot = use_rk2_for_shoot
+        self.use_rk4_for_shoot = use_rk4_for_shoot
         self.use_rk2_for_flow = use_rk2_for_flow
 
         self.use_svf = use_svf
@@ -217,6 +218,13 @@ class Exponential:
                 for i in range(self.number_of_time_points - 1):
                     new_cp, new_mom = self._rk2_step(self.shoot_kernel, self.control_points_t[i], self.momenta_t[i], dt,
                                                      return_mom=True)
+                    self.control_points_t.append(new_cp)
+                    self.momenta_t.append(new_mom)
+
+            elif self.use_rk4_for_shoot:
+                for i in range(self.number_of_time_points - 1):
+                    new_cp, new_mom = self.rk4_step(
+                        self.shoot_kernel, self.control_points_t[i], self.momenta_t[i], dt, return_mom=True)
                     self.control_points_t.append(new_cp)
                     self.momenta_t.append(new_mom)
 

@@ -262,7 +262,8 @@ class SplineRegression(GeodesicRegression):
     ####################################################################################################################
     # Writing methods:
     ####################################################################################################################
-    def _write_model_predictions(self, output_dir, dataset=None, write_adjoint_parameters=False):
+    def _write_model_predictions(self, output_dir, dataset=None,
+                                 write_adjoint_parameters=False, compute_residuals=True):
 
         # Initialize ---------------------------------------------------------------------------------------------------
         template_data, template_points, control_points, momenta, external_forces = self._fixed_effects_to_torch_tensors(
@@ -285,6 +286,7 @@ class SplineRegression(GeodesicRegression):
 
         # Model predictions.
         if dataset is not None:
+            residuals = []
             for j, time in enumerate(target_times):
                 names = []
                 for k, (object_name, object_extension) in enumerate(
@@ -297,15 +299,22 @@ class SplineRegression(GeodesicRegression):
                 self.template.write(output_dir, names,
                                     {key: value.data.cpu().numpy() for key, value in deformed_data.items()})
 
+                if compute_residuals:
+                    residuals.append(self.multi_object_attachment.compute_distances(
+                        deformed_data, self.template, dataset.deformable_objects[0][j]))
+                    residuals_list = [[residuals_i_k.data.cpu().numpy() for residuals_i_k in residuals_i] for
+                                      residuals_i in residuals]
+                    write_2D_list(residuals_list, output_dir, self.name + "__EstimatedParameters__Residuals.txt")
+
     def _write_model_parameters(self, output_dir):
         # Template.
-        template_names = []
-        for k in range(len(self.objects_name)):
-            aux = self.name + '__EstimatedParameters__Template_' + self.objects_name[k] + '__tp_' \
-                  + str(self.geodesic.backward_exponential.number_of_time_points - 1) \
-                  + ('__age_%.2f' % self.geodesic.t0) + self.objects_name_extension[k]
-            template_names.append(aux)
-        self.template.write(output_dir, template_names)
+        # template_names = []
+        # for k in range(len(self.objects_name)):
+        #     aux = self.name + '__EstimatedParameters__Template_' + self.objects_name[k] + '__tp_' \
+        #           + str(self.geodesic.backward_exponential.number_of_time_points - 1) \
+        #           + ('__age_%.2f' % self.geodesic.t0) + self.objects_name_extension[k]
+        #     template_names.append(aux)
+        # self.template.write(output_dir, template_names)
 
         # Control points.
         write_2D_array(self.get_control_points(), output_dir, self.name + "__EstimatedParameters__ControlPoints.txt")

@@ -20,13 +20,14 @@ class Spline(Geodesic):
     ### Constructor:
     ####################################################################################################################
 
-    def __init__(self, dense_mode=default.dense_mode, use_rk2_for_flow=default.use_rk2_for_flow,
+    def __init__(self, dense_mode=default.dense_mode, use_rk2_for_flow=default.use_rk2_for_flow, geodesic_weight=.1,
                  kernel=default.deformation_kernel, shoot_kernel_type=None, **kwargs):
         super(Spline, self).__init__(
             dense_mode=dense_mode, use_rk2_for_flow=use_rk2_for_flow,
             kernel=kernel, shoot_kernel_type=shoot_kernel_type, **kwargs)
 
         self.external_forces = None
+        self.geodesic_weight = geodesic_weight
 
         self.backward_exponential = SplineEvolutionModel(
             dense_mode=dense_mode,
@@ -106,7 +107,7 @@ class Spline(Geodesic):
         """
         geodesic_part = self.forward_exponential.scalar_product(
             self.control_points_t0, self.momenta_t0, self.momenta_t0)
-        return geodesic_part + (self.external_forces ** 2).sum()
+        return self.geodesic_weight * geodesic_part + (self.external_forces ** 2).sum()
 
 
 class SplineEvolutionModel(Exponential):

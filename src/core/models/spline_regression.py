@@ -41,7 +41,7 @@ class SplineRegression(GeodesicRegression):
                  initial_control_points=default.initial_control_points,
                  freeze_control_points=default.freeze_control_points,
                  initial_cp_spacing=default.initial_cp_spacing,
-                 freeze_external_forces=False,
+                 freeze_external_forces=False, target_weights=None,
 
                  initial_momenta=default.initial_momenta,
 
@@ -85,6 +85,11 @@ class SplineRegression(GeodesicRegression):
             concentration_of_time_points, self.number_of_control_points, self.dimension)
         self.freeze_external_forces = freeze_external_forces
 
+        if target_weights is None:
+            self.target_weights = torch.ones(concentration_of_time_points)
+        else:
+            self.target_weights = target_weights
+
     ####################################################################################################################
     # Encapsulation methods:
     ####################################################################################################################
@@ -117,6 +122,13 @@ class SplineRegression(GeodesicRegression):
         self.set_momenta(fixed_effects['momenta'])
         if not self.freeze_external_forces:
             self.set_external_forces(fixed_effects['external_forces'])
+
+    def get_target_weights(self):
+        return self.target_weights
+
+    def set_target_weights(self, weights):
+        self.target_weights = weights
+
 
     ####################################################################################################################
     # Public methods:
@@ -204,7 +216,7 @@ class SplineRegression(GeodesicRegression):
         for j, (time, obj) in enumerate(zip(target_times, target_objects)):
             deformed_points = self.geodesic.get_template_points(time)
             deformed_data = self.template.get_deformed_data(deformed_points, template_data)
-            attachment -= self.multi_object_attachment.compute_weighted_distance(
+            attachment -= self.target_weights[j] * self.multi_object_attachment.compute_weighted_distance(
                 deformed_data, self.template, obj, self.objects_noise_variance)
         regularity = - self.geodesic.get_norm_squared()
 

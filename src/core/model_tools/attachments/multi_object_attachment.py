@@ -39,7 +39,7 @@ class MultiObjectAttachment:
         assert len(multi_obj1.object_list) == len(multi_obj2.object_list), \
             "Cannot compute distance between multi-objects which have different number of objects"
         device = next(iter(data.values())).device  # deduce device from template_data
-        dtype  = next(iter(data.values())).dtype   # deduce dtype from template_data
+        dtype = next(iter(data.values())).dtype   # deduce dtype from template_data
         distances = torch.zeros((len(multi_obj1.object_list),), device=device, dtype=dtype)
 
         pos = 0

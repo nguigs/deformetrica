@@ -42,6 +42,7 @@ class SplineRegression(GeodesicRegression):
                  freeze_control_points=default.freeze_control_points,
                  initial_cp_spacing=default.initial_cp_spacing,
                  freeze_external_forces=False, target_weights=None,
+                 geodesic_weight=.1,
 
                  initial_momenta=default.initial_momenta,
 
@@ -76,9 +77,8 @@ class SplineRegression(GeodesicRegression):
             dense_mode=dense_mode,
             kernel=kernel_factory.factory(
                 deformation_kernel_type, gpu_mode=gpu_mode, kernel_width=deformation_kernel_width),
-            shoot_kernel_type=shoot_kernel_type,
-            t0=t0, concentration_of_time_points=concentration_of_time_points,
-            use_rk2_for_flow=use_rk2_for_flow)
+            shoot_kernel_type=shoot_kernel_type, use_rk2_for_flow=use_rk2_for_flow,
+            t0=t0, concentration_of_time_points=concentration_of_time_points, geodesic_weight=geodesic_weight)
 
         # External Forces.
         self.fixed_effects['external_forces'] = torch.zeros(

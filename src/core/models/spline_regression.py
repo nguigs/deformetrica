@@ -34,15 +34,12 @@ class SplineRegression(GeodesicRegression):
                  concentration_of_time_points=default.concentration_of_time_points, t0=default.t0,
                  use_rk2_for_flow=default.use_rk2_for_flow,
 
-                 freeze_template=default.freeze_template,
-                 use_sobolev_gradient=default.use_sobolev_gradient,
+                 freeze_template=default.freeze_template, use_sobolev_gradient=default.use_sobolev_gradient,
                  smoothing_kernel_width=default.smoothing_kernel_width,
 
                  initial_control_points=default.initial_control_points,
-                 freeze_control_points=default.freeze_control_points,
-                 initial_cp_spacing=default.initial_cp_spacing,
-                 freeze_external_forces=False, target_weights=None,
-                 geodesic_weight=.1,
+                 freeze_control_points=default.freeze_control_points, initial_cp_spacing=default.initial_cp_spacing,
+                 freeze_external_forces=False, target_weights=None, geodesic_weight=.1,
 
                  initial_momenta=default.initial_momenta,
 
@@ -129,7 +126,6 @@ class SplineRegression(GeodesicRegression):
     def set_target_weights(self, weights):
         self.target_weights = weights
 
-
     ####################################################################################################################
     # Public methods:
     ####################################################################################################################
@@ -147,7 +143,6 @@ class SplineRegression(GeodesicRegression):
         :param with_grad: Flag that indicates wether the gradient should be returned as well.
         :return:
         """
-
         device, device_id = utilities.get_best_device(gpu_mode=self.gpu_mode)
 
         # Initialize: conversion from numpy to torch -------------------------------------------------------------------
@@ -260,8 +255,7 @@ class SplineRegression(GeodesicRegression):
 
         # Momenta.
         momenta = self.fixed_effects['momenta']
-        momenta = utilities.move_data(
-            momenta, dtype=self.tensor_scalar_type, requires_grad=with_grad, device=device)
+        momenta = utilities.move_data(momenta, dtype=self.tensor_scalar_type, requires_grad=with_grad, device=device)
 
         # External Forces
         external_forces = self.fixed_effects['external_forces']

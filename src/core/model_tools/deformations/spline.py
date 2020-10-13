@@ -107,7 +107,7 @@ class Spline(Geodesic):
         """
         geodesic_part = self.forward_exponential.scalar_product(
             self.control_points_t0, self.momenta_t0, self.momenta_t0)
-        return self.geodesic_weight * geodesic_part + (self.external_forces ** 2).sum()
+        return geodesic_part + (self.external_forces ** 2).sum() / self.concentration_of_time_points
 
 
 class SplineEvolutionModel(Exponential):

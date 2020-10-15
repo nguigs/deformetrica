@@ -431,7 +431,8 @@ class Deformetrica:
         logger.info(estimator_options)
 
         # Instantiate dataset.
-        dataset = {'target': target_vol, 'subject_size': data_sizes, 'number_of_subjects': len(target_vol)}
+        dataset = {'target': target_vol, 'subject_size': data_sizes, 'number_of_subjects': len(target_vol),
+                   'subject_ids': dataset_specifications['subject_ids']}
 
         # Instantiate model.
         statistical_model = VolumeConstrainedShooting(

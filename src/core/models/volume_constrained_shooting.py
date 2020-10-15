@@ -1,9 +1,11 @@
 import logging
 import torch
+import numpy as np
 import vtk
 
 from core import default
 from core.models.deterministic_atlas import DeterministicAtlas
+from in_out.array_readers_and_writers import read_3D_array, write_2D_list
 from support import utilities
 
 
@@ -13,7 +15,7 @@ logger = logging.getLogger(__name__)
 class VolumeConstrainedShooting(DeterministicAtlas):
 
     def __init__(self, template_specifications,
-
+                 number_of_subjects=1,
                  dimension=default.dimension,
                  tensor_scalar_type=default.tensor_scalar_type,
                  tensor_integer_type=default.tensor_integer_type,
@@ -22,6 +24,7 @@ class VolumeConstrainedShooting(DeterministicAtlas):
 
                  deformation_kernel_type=default.deformation_kernel_type,
                  deformation_kernel_width=default.deformation_kernel_width,
+                 deformation_kernel_device=default.deformation_kernel_device,
 
                  shoot_kernel_type=default.shoot_kernel_type,
                  number_of_time_points=default.number_of_time_points,
@@ -34,12 +37,11 @@ class VolumeConstrainedShooting(DeterministicAtlas):
                  initial_cp_spacing=default.initial_cp_spacing,
                  initial_momenta=default.initial_momenta,
 
-                 gpu_mode=default.gpu_mode,
-
-                 **kwargs):
+                 gpu_mode=default.gpu_mode, **kwargs):
 
         super(VolumeConstrainedShooting, self).__init__(
-            self, name='VolumeConstrainedShooting', gpu_mode=gpu_mode, dimension=dimension,
+            gpu_mode=gpu_mode, dimension=dimension,
+            number_of_subjects=number_of_subjects,
             tensor_scalar_type=tensor_scalar_type,
             tensor_integer_type=tensor_integer_type, dense_mode=dense_mode,
             number_of_processes=number_of_processes,
@@ -60,14 +62,20 @@ class VolumeConstrainedShooting(DeterministicAtlas):
             freeze_control_points=True,
             initial_cp_spacing=initial_cp_spacing,
 
-            initial_momenta=initial_momenta, **kwargs)
+            initial_momenta=initial_momenta)
 
+        self.name = 'VolumeConstrainedShooting'
         # Declare model structure.
-        self.fixed_effects['template_data'] = None
-        self.fixed_effects['control_points'] = None
-        self.fixed_effects['momenta'] = None
-        self.fixed_effects['intercept'] = None
-        self.fixed_effects['size_effect'] = None
+        # self.fixed_effects['template_data'] = None
+        # self.fixed_effects['control_points'] = None
+        # self.fixed_effects['momenta'] = None
+        control_points = read_3D_array(initial_control_points)
+        logger.info('>> Reading %d initial control points from file %s.' % (len(control_points), initial_control_points))
+        self.fixed_effects['control_points'] = control_points
+        self.number_of_control_points = len(self.fixed_effects['control_points'])
+
+        self.fixed_effects['intercept'] = torch.tensor([1.])
+        self.fixed_effects['size_effect'] = torch.tensor([0.])
 
         self.freeze_template = True
         self.freeze_control_points = True
@@ -142,8 +150,7 @@ class VolumeConstrainedShooting(DeterministicAtlas):
         for i, target in enumerate(target_size):
             new_attachment, new_regularity = self.deform_and_compute_attachment_and_regularity(
                 self.exponential, template_points, control_points[i], momenta[i],
-                self.template, template_data, intercept, size_effect, subject_size[i], target, device=device)
-
+                self.template, template_data, intercept, size_effect, subject_size, target, device=device)
             attachment += new_attachment
             regularity += new_regularity
 
@@ -151,8 +158,7 @@ class VolumeConstrainedShooting(DeterministicAtlas):
         return self.compute_gradients(attachment, regularity, intercept, size_effect, self.freeze_size_effect,
                                       with_grad)
 
-    @classmethod
-    def deform_and_compute_attachment_and_regularity(cls, exponential, template_points, control_points, momenta,
+    def deform_and_compute_attachment_and_regularity(self, exponential, template_points, control_points, momenta,
                                                      template, template_data, intercept, size_effect,
                                                      subject_size, target_size,
                                                      device='cpu'):
@@ -167,9 +173,9 @@ class VolumeConstrainedShooting(DeterministicAtlas):
         # Compute attachment and regularity.
         deformed_points = exponential.get_template_points()
         deformed_data = template.get_deformed_data(deformed_points, template_data)
-        deformed_volume = cls.volume(deformed_data)
-        attachment = (deformed_volume - target_size) ** 2
-        regularity = (1 - scaling) ** 2
+        deformed_volume = self.volume(tensor=deformed_data['landmark_points'])
+        attachment = -((deformed_volume - target_size) / 1000) ** 2 / self.number_of_subjects
+        regularity = -(1 - scaling[0]) ** 2
 
         assert torch.device(
             device) == attachment.device == regularity.device, 'attachment and regularity tensors must be on the same device. ' \
@@ -189,7 +195,7 @@ class VolumeConstrainedShooting(DeterministicAtlas):
             gradient = {'intercept': intercept.grad.detach().cpu().numpy()}
             if not freeze_size_effect:
                 gradient['size_effect'] = size_effect.grad.detach().cpu().numpy()
-
+            print(gradient)
             res = attachment.detach().cpu().numpy(), regularity.detach().cpu().numpy(), gradient
 
         else:
@@ -209,3 +215,88 @@ class VolumeConstrainedShooting(DeterministicAtlas):
             triangle = torch.stack([tensor[p0], tensor[p1], tensor[p2]])
             vol += triangle.det() / 6
         return vol
+
+    def _fixed_effects_to_torch_tensors(self, with_grad, device='cpu'):
+        """
+        Convert the fixed_effects into torch tensors.
+        """
+        # Template data.
+        template_data = self.fixed_effects['template_data']
+        template_data = {key: utilities.move_data(value, device=device, dtype=self.tensor_scalar_type,
+                                                  requires_grad=(not self.freeze_template and with_grad))
+                         for key, value in template_data.items()}
+
+        # Template points.
+        template_points = self.template.get_points()
+        template_points = {key: utilities.move_data(value, device=device, dtype=self.tensor_scalar_type,
+                                                    requires_grad=(not self.freeze_template and with_grad))
+                           for key, value in template_points.items()}
+
+        # Control points.
+        if self.dense_mode:
+            assert (('landmark_points' in self.template.get_points().keys()) and
+                    ('image_points' not in self.template.get_points().keys())), \
+                'In dense mode, only landmark objects are allowed. One at least is needed.'
+            control_points = template_points['landmark_points']
+        else:
+            control_points = self.fixed_effects['control_points']
+            control_points = utilities.move_data(control_points, device=device, dtype=self.tensor_scalar_type,
+                                                 requires_grad=(not self.freeze_control_points and with_grad))
+
+        # Momenta.
+        momenta = self.fixed_effects['momenta']
+        momenta = utilities.move_data(momenta, device=device, dtype=self.tensor_scalar_type,
+                                      requires_grad=(not self.freeze_momenta and with_grad))
+
+        intercept = self.fixed_effects['intercept']
+        intercept = utilities.move_data(intercept, device=device, dtype=self.tensor_scalar_type, requires_grad=True)
+
+        size_effect = self.fixed_effects['size_effect']
+        size_effect = utilities.move_data(
+            size_effect, device=device, dtype=self.tensor_scalar_type,
+            requires_grad=(not self.freeze_size_effect and with_grad))
+        return template_data, template_points, control_points, momenta, intercept, size_effect
+
+    def _write_model_predictions(self, dataset, individual_RER, output_dir, compute_residuals=True):
+        device, _ = utilities.get_best_device(self.gpu_mode)
+
+        # Initialize.
+        template_data, template_points, control_points, momenta, intercept, size_effect = \
+            self._fixed_effects_to_torch_tensors(False, device=device)
+
+        # Deform, write reconstructions and compute residuals.
+        self.exponential.set_initial_template_points(template_points)
+
+        residuals = []  # List of torch 1D tensors. Individuals, objects.
+        for i, subject_id in enumerate(dataset['subject_ids']):
+            self.exponential.set_initial_control_points(control_points[i])
+            scaling = intercept + size_effect * dataset['subject_size']
+            self.exponential.set_initial_momenta(scaling * momenta[i])
+            self.exponential.update()
+
+            # # Writing the whole flow.
+            # names = []
+            # for k, object_name in enumerate(self.objects_name):
+            #     name = self.name + '__flow__' + object_name + '__subject_' + subject_id
+            #     names.append(name)
+            # self.exponential.write_flow(names, self.objects_name_extension, self.template, template_data, output_dir)
+
+            deformed_points = self.exponential.get_template_points()
+            deformed_data = self.template.get_deformed_data(deformed_points, template_data)
+
+            if compute_residuals:
+                residuals.append([
+                    (self.volume(deformed_data['landmark_points'].detach()) - dataset['target'][i]) / 1000])
+
+            names = []
+            for k, (object_name, object_extension) \
+                    in enumerate(zip(self.objects_name, self.objects_name_extension)):
+                name = self.name + '__Reconstruction__' + object_name + '__subject_' + subject_id + object_extension
+                names.append(name)
+            self.template.write(output_dir, names,
+                                {key: value.data.cpu().numpy() for key, value in deformed_data.items()})
+
+        return residuals
+
+    def _write_model_parameters(self, output_dir):
+        write_2D_list(np.stack([self.get_intercept(), self.get_size_effect()]), output_dir, 'scaling_parameters.txt')

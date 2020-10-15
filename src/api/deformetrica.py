@@ -19,6 +19,7 @@ from core.models.deterministic_atlas import DeterministicAtlas
 from core.models.geodesic_regression import GeodesicRegression
 from core.models.spline_regression import SplineRegression
 from core.models.longitudinal_atlas import LongitudinalAtlas
+from core.models.volume_constrained_shooting import VolumeConstrainedShooting
 from in_out.dataset_functions import create_dataset
 from in_out.deformable_object_reader import DeformableObjectReader
 from launch.compute_parallel_transport import compute_parallel_transport
@@ -408,6 +409,35 @@ class Deformetrica:
         # Instantiate model.
         statistical_model = SplineRegression(template_specifications, **model_options)
         statistical_model.initialize_noise_variance(dataset)
+
+        # Instantiate estimator.
+        estimator = self.__instantiate_estimator(statistical_model, dataset, estimator_options, default=ScipyOptimize)
+
+        try:
+            # Launch.
+            self.__launch_estimator(estimator, write_output)
+        finally:
+            statistical_model.cleanup()
+
+        return statistical_model
+
+    def estimate_volume_constrained_shooting(
+        self, template_specifications, target_vol, data_sizes, dataset_specifications,
+            model_options={}, estimator_options={}, write_output=True):
+
+        template_specifications, model_options, estimator_options = self.further_initialization(
+            'DeterministicAtlas', template_specifications, model_options, dataset_specifications, estimator_options)
+
+        logger.info(estimator_options)
+
+        # Instantiate dataset.
+        dataset = {'target': target_vol, 'subject_size': data_sizes, 'number_of_subjects': len(target_vol)}
+
+        # Instantiate model.
+        statistical_model = VolumeConstrainedShooting(
+            template_specifications, dataset['number_of_subjects'], **model_options)
+        statistical_model.initialize_noise_variance(dataset)
+        # statistical_model.setup_multiprocess_pool(dataset)
 
         # Instantiate estimator.
         estimator = self.__instantiate_estimator(statistical_model, dataset, estimator_options, default=ScipyOptimize)

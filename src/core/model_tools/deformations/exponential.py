@@ -35,8 +35,8 @@ class Exponential:
                  use_svf=False,
                  number_of_time_points=None,
                  initial_control_points=None, control_points_t=None,
-                 initial_momenta=None, momenta_t=None,
-                 initial_template_points=None, template_points_t=None, use_rk4_for_shoot=False,
+                 initial_momenta=None, momenta_t=None, preserve_volume=False,
+                 initial_template_points=None, template_points_t=None, use_rk4_for_shoot=False, polydata=None,
                  shoot_is_modified=True, flow_is_modified=True, use_rk2_for_shoot=False, use_rk2_for_flow=False):
 
         self.dense_mode = dense_mode
@@ -73,6 +73,8 @@ class Exponential:
         self.use_rk2_for_flow = use_rk2_for_flow
 
         self.use_svf = use_svf
+        self.triangles = self._get_triangle_mask(polydata)
+        self.preserve_volume = preserve_volume
 
         # Contains the inverse kernel matrices for the time points 1 to self.number_of_time_points
         # (ACHTUNG does not contain the initial matrix, it is not needed)
@@ -261,6 +263,13 @@ class Exponential:
 
             for i in range(self.number_of_time_points - 1):
                 d_pos = self.kernel.convolve(landmark_points[i], self.control_points_t[i], self.momenta_t[i])
+                if self.preserve_volume:
+                    initial_shape = landmark_points[i].clone().detach().requires_grad_(True)
+                    deformed_volume = self._volume(tensor=initial_shape)
+                    deformed_volume.backward()
+                    grad = initial_shape.grad.detach()
+                    d_pos -= torch.sum(grad * d_pos) / torch.sum(grad ** 2) * grad
+
                 landmark_points.append(landmark_points[i] + dt * d_pos)
 
                 if self.use_rk2_for_flow:
@@ -600,6 +609,26 @@ class Exponential:
 
         tangent_vec = torch.Tensor(res.x).reshape(x.shape)
         return tangent_vec
+
+    @staticmethod
+    def _get_triangle_mask(polydata):
+        n = polydata.GetNumberOfCells()
+        triangles = []
+        for i in range(n):
+            cell = polydata.GetCell(i)
+            p0 = cell.GetPointId(0)
+            p1 = cell.GetPointId(1)
+            p2 = cell.GetPointId(2)
+            triangle = torch.tensor([p0, p1, p2])
+            triangles.append(triangle)
+        return torch.stack(triangles)
+
+    def _volume(self, tensor):
+        triangles = self.triangles
+        shape = torch.stack(
+            [tensor[triangles[:, 0]], tensor[triangles[:, 1]],
+             tensor[triangles[:, 2]]], dim=1)
+        return torch.det(shape).sum() / 6
 
     # TODO. Wrap pytorch of an efficient C code ? Use keops ? Called ApplyH in PyCa. Check Numba as well.
     # @jit(parallel=True)

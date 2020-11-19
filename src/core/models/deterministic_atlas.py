@@ -13,6 +13,7 @@ from core.models.model_functions import initialize_control_points, initialize_mo
 from core.observations.deformable_objects.deformable_multi_object import DeformableMultiObject
 from in_out.array_readers_and_writers import *
 from in_out.dataset_functions import create_template_metadata
+from in_out.deformable_object_reader import vtkPolyDataReader
 import support.utilities as utilities
 
 logger = logging.getLogger(__name__)
@@ -116,7 +117,7 @@ class DeterministicAtlas(AbstractStatisticalModel):
                  gpu_mode=default.gpu_mode,
                  process_per_gpu=default.process_per_gpu,
 
-                 use_svf=False,
+                 use_svf=False, preserve_volume=False,
 
                  **kwargs):
 
@@ -138,10 +139,16 @@ class DeterministicAtlas(AbstractStatisticalModel):
         self.freeze_control_points = freeze_control_points
         self.freeze_momenta = freeze_momenta
 
+        reader = vtkPolyDataReader()
+        reader.SetFileName(template_specifications['shape']['filename'])
+        reader.Update()
+        self.polydata = reader.GetOutput()
+        self.preserve_volume = preserve_volume
+
         # Deformation.
         self.exponential = Exponential(
             dense_mode=dense_mode,
-            use_svf=use_svf,
+            use_svf=use_svf, polydata=self.polydata, preserve_volume=self.preserve_volume,
             kernel=kernel_factory.factory(deformation_kernel_type,
                                           gpu_mode=gpu_mode,
                                           kernel_width=deformation_kernel_width),

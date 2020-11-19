@@ -4,8 +4,10 @@ import torch
 
 from core import default
 from core.model_tools.deformations.geodesic import Geodesic
+from core.model_tools.deformations.spline import Spline
 from core.observations.deformable_objects.deformable_multi_object import DeformableMultiObject
 from in_out.array_readers_and_writers import *
+from in_out.deformable_object_reader import vtkPolyDataReader
 from in_out.dataset_functions import create_template_metadata
 import support.kernels as kernel_factory
 
@@ -20,17 +22,19 @@ def compute_shooting(template_specifications,
                      deformation_kernel_type=default.deformation_kernel_type,
                      deformation_kernel_width=default.deformation_kernel_width,
                      deformation_kernel_device=default.deformation_kernel_device,
+                     deformation_model='geodesic',
 
                      shoot_kernel_type=None,
                      initial_control_points=default.initial_control_points,
                      initial_momenta=default.initial_momenta,
+                     external_forces=None,
                      concentration_of_time_points=default.concentration_of_time_points,
                      t0=None, tmin=default.tmin, tmax=default.tmax, dense_mode=default.dense_mode,
                      number_of_time_points=default.number_of_time_points,
                      use_rk2_for_shoot=default.use_rk2_for_shoot,
                      use_rk2_for_flow=default.use_rk2_for_flow,
-                     gpu_mode=default.gpu_mode,
-                     output_dir=default.output_dir,use_svf=False,
+                     gpu_mode=default.gpu_mode, preserve_volume=False,
+                     output_dir=default.output_dir, use_svf=False,
                      write_adjoint_parameters=True, **kwargs):
     logger.info('[ compute_shooting function ]')
 
@@ -70,9 +74,21 @@ def compute_shooting(template_specifications,
     template_data = {key: torch.from_numpy(value).type(tensor_scalar_type)
                      for key, value in template.get_data().items()}
 
-    geodesic = Geodesic(dense_mode=dense_mode, use_svf=use_svf,
+    reader = vtkPolyDataReader()
+    reader.SetFileName(template_specifications['shape']['filename'])
+    reader.Update()
+    polydata = reader.GetOutput()
+
+    if deformation_model == 'spline' and external_forces is not None:
+        geodesic = Spline(dense_mode=dense_mode,
                         concentration_of_time_points=concentration_of_time_points, t0=t0,
                         kernel=deformation_kernel, shoot_kernel_type=shoot_kernel_type,
+                        use_rk2_for_flow=use_rk2_for_flow)
+        geodesic.set_external_force(external_forces)
+    else:
+        geodesic = Geodesic(dense_mode=dense_mode, use_svf=use_svf, preserve_volume=preserve_volume,
+                        concentration_of_time_points=concentration_of_time_points, t0=t0,
+                        kernel=deformation_kernel, shoot_kernel_type=shoot_kernel_type, polydata=polydata,
                         use_rk2_for_shoot=use_rk2_for_shoot, use_rk2_for_flow=use_rk2_for_flow)
 
     if t0 is None:

@@ -36,6 +36,7 @@ class VolumeConstrainedShooting(DeterministicAtlas):
                  initial_control_points=default.initial_control_points,
                  initial_cp_spacing=default.initial_cp_spacing,
                  initial_momenta=default.initial_momenta,
+                 gradient_flow=False, regularisation=1.,
 
                  gpu_mode=default.gpu_mode, **kwargs):
 
@@ -69,10 +70,11 @@ class VolumeConstrainedShooting(DeterministicAtlas):
         # self.fixed_effects['template_data'] = None
         # self.fixed_effects['control_points'] = None
         # self.fixed_effects['momenta'] = None
-        control_points = read_3D_array(initial_control_points)
-        logger.info('>> Reading %d initial control points from file %s.' % (len(control_points), initial_control_points))
-        self.fixed_effects['control_points'] = control_points
-        self.number_of_control_points = len(self.fixed_effects['control_points'])
+        if not gradient_flow:
+            control_points = read_3D_array(initial_control_points)
+            logger.info('>> Reading %d initial control points from file %s.' % (len(control_points), initial_control_points))
+            self.fixed_effects['control_points'] = control_points
+            self.number_of_control_points = len(self.fixed_effects['control_points'])
 
         self.fixed_effects['intercept'] = torch.tensor([1.])
         self.fixed_effects['size_effect'] = torch.tensor([0.])
@@ -81,6 +83,8 @@ class VolumeConstrainedShooting(DeterministicAtlas):
         self.freeze_control_points = True
         self.freeze_momenta = True
         self.freeze_size_effect = freeze_size_effect
+        self.gradient_flow = gradient_flow
+        self.regularization = regularisation
 
         reader = vtk.vtkPolyDataReader()
         reader.SetFileName(template_specifications['shape']['filename'])
@@ -164,18 +168,21 @@ class VolumeConstrainedShooting(DeterministicAtlas):
                                                      device='cpu'):
         # Deform.
         exponential.set_initial_template_points(template_points)
-        exponential.set_initial_control_points(control_points)
         scaling = intercept + size_effect * subject_size
-        exponential.set_initial_momenta(scaling * momenta)
-        exponential.move_data_to_(device=device)
-        exponential.update()
+        if self.gradient_flow:
+            exponential.volume_gradient_flow(end_time=scaling)
+        else:
+            exponential.set_initial_control_points(control_points)
+            exponential.set_initial_momenta(scaling * momenta)
+            exponential.move_data_to_(device=device)
+            exponential.update()
 
         # Compute attachment and regularity.
         deformed_points = exponential.get_template_points()
         deformed_data = template.get_deformed_data(deformed_points, template_data)
         deformed_volume = self.volume(tensor=deformed_data['landmark_points'])
         attachment = -((deformed_volume - target_size) / 1000) ** 2 / self.number_of_subjects
-        regularity = -(1 - scaling[0]) ** 2
+        regularity = - self.regularization * (1. - scaling[0]) ** 2
 
         assert torch.device(
             device) == attachment.device == regularity.device, 'attachment and regularity tensors must be on the same device. ' \
@@ -195,7 +202,7 @@ class VolumeConstrainedShooting(DeterministicAtlas):
             gradient = {'intercept': intercept.grad.detach().cpu().numpy()}
             if not freeze_size_effect:
                 gradient['size_effect'] = size_effect.grad.detach().cpu().numpy()
-            print(gradient)
+
             res = attachment.detach().cpu().numpy(), regularity.detach().cpu().numpy(), gradient
 
         else:
@@ -269,10 +276,14 @@ class VolumeConstrainedShooting(DeterministicAtlas):
 
         residuals = []  # List of torch 1D tensors. Individuals, objects.
         for i, subject_id in enumerate(dataset['subject_ids']):
-            self.exponential.set_initial_control_points(control_points[i])
             scaling = intercept + size_effect * dataset['subject_size']
-            self.exponential.set_initial_momenta(scaling * momenta[i])
-            self.exponential.update()
+            if self.gradient_flow:
+                self.exponential.volume_gradient_flow(end_time=scaling)
+            else:
+                self.exponential.set_initial_control_points(control_points[i])
+                self.exponential.set_initial_momenta(scaling * momenta[i])
+                self.exponential.move_data_to_(device=device)
+                self.exponential.update()
 
             # # Writing the whole flow.
             # names = []

@@ -267,8 +267,9 @@ class Exponential:
                     initial_shape = landmark_points[i].clone().detach().requires_grad_(True)
                     deformed_volume = self._volume(tensor=initial_shape)
                     deformed_volume.backward()
-                    grad = initial_shape.grad.detach()
-                    d_pos -= torch.sum(grad * d_pos) / torch.sum(grad ** 2) * grad
+                    grad_star = initial_shape.grad.detach()
+                    grad = self.kernel.convolve(initial_shape, initial_shape, grad_star)
+                    d_pos -= torch.sum(grad_star * d_pos) / torch.sum(grad * grad_star) * grad
 
                 landmark_points.append(landmark_points[i] + dt * d_pos)
 
@@ -311,6 +312,54 @@ class Exponential:
         # Correctly resets the attribute flag.
         self.flow_is_modified = False
         # logger.info('exponential.flow(): ' + str(time.perf_counter() - start_update))
+
+    def volume_gradient_flow(self, end_time=1.0):
+        """
+        Flow the trajectory of the landmark and/or image points.
+        """
+        # Initialization.
+        dt = end_time / float(self.number_of_time_points - 1)
+        self.template_points_t = {}
+
+        # Special case of the dense mode.
+        if self.dense_mode:
+            assert 'image_points' not in self.initial_template_points.keys(), 'Dense mode not allowed with image data.'
+            self.template_points_t['landmark_points'] = self.control_points_t
+            self.flow_is_modified = False
+            return
+
+        # Flow landmarks points.
+        if 'landmark_points' in self.initial_template_points.keys():
+            landmark_points = [self.initial_template_points['landmark_points']]
+
+            for i in range(self.number_of_time_points - 1):
+                initial_shape = landmark_points[i].clone().detach().requires_grad_(True)
+                deformed_volume = self._volume(tensor=initial_shape)
+                deformed_volume.backward()
+                grad_star = initial_shape.grad.detach() / 1000
+                d_pos = - self.kernel.convolve(initial_shape, initial_shape, grad_star)
+
+                landmark_points.append(landmark_points[i] + dt * d_pos)
+
+                if self.use_rk2_for_flow:
+                    # In this case improved euler (= Heun's method)
+                    # to save one computation of convolve gradient per iteration.
+                    if i < self.number_of_time_points - 2:
+                        initial_shape = landmark_points[i + 1].clone().detach().requires_grad_(True)
+                        deformed_volume = self._volume(tensor=initial_shape)
+                        deformed_volume.backward()
+                        grad_star = initial_shape.grad.detach()
+                        d_pos_new = self.kernel.convolve(initial_shape, initial_shape, grad_star)
+
+                        landmark_points[-1] = landmark_points[i] + dt / 2 * (d_pos_new + d_pos)
+                    else:
+                        final_cp, final_mom = self._rk2_step(
+                            self.kernel, self.control_points_t[-1], self.momenta_t[-1], dt, return_mom=True)
+                        landmark_points[-1] = landmark_points[i] + dt / 2 * (
+                                self.kernel.convolve(landmark_points[i + 1], final_cp, final_mom) + d_pos)
+
+            self.template_points_t['landmark_points'] = landmark_points
+        self.flow_is_modified = False
 
     def parallel_transport(self, momenta_to_transport, initial_time_point=0, is_orthogonal=False):
         """

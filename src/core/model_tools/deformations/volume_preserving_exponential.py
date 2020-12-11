@@ -392,7 +392,7 @@ class Exponential:
         if self.number_of_time_points % 2 == 1:
             transported_momenta *= -1.
 
-        return final_cp, transported_momenta, final_shape
+        return final_cp, transported_momenta
 
     ####################################################################################################################
     ### Utility methods:

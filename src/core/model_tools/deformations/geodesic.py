@@ -3,6 +3,7 @@ import warnings
 
 
 from core import default
+from core.model_tools.deformations.volume_preserving_exponential import Exponential as volExponential
 from core.model_tools.deformations.exponential import Exponential
 from in_out.array_readers_and_writers import *
 
@@ -51,12 +52,14 @@ class Geodesic:
         self.momenta_t0 = None
         self.template_points_t0 = None
 
-        self.backward_exponential = Exponential(
+        deformation = volExponential if preserve_volume else Exponential
+
+        self.backward_exponential = deformation(
             dense_mode=dense_mode, use_svf=use_svf, preserve_volume=preserve_volume, polydata=polydata,
             kernel=kernel, shoot_kernel_type=shoot_kernel_type, use_rk4_for_shoot=use_rk4_for_shoot,
             use_rk2_for_shoot=use_rk2_for_shoot, use_rk2_for_flow=use_rk2_for_flow)
 
-        self.forward_exponential = Exponential(
+        self.forward_exponential = deformation(
             dense_mode=dense_mode, use_svf=use_svf, preserve_volume=preserve_volume, polydata=polydata,
             kernel=kernel, shoot_kernel_type=shoot_kernel_type, use_rk4_for_shoot=use_rk4_for_shoot,
             use_rk2_for_shoot=use_rk2_for_shoot, use_rk2_for_flow=use_rk2_for_flow)

@@ -73,7 +73,8 @@ class Exponential:
         self.use_rk2_for_flow = use_rk2_for_flow
 
         self.use_svf = use_svf
-        self.triangles = self._get_triangle_mask(polydata)
+        if polydata is not None:
+            self.triangles = self._get_triangle_mask(polydata)
         self.preserve_volume = preserve_volume
 
         # Contains the inverse kernel matrices for the time points 1 to self.number_of_time_points
@@ -113,6 +114,10 @@ class Exponential:
     def set_use_rk2_for_flow(self, flag):
         self.flow_is_modified = True
         self.use_rk2_for_flow = flag
+
+    def set_use_rk4_for_shoot(self, flag):
+        self.shoot_is_modified = True
+        self.use_rk4_for_shoot = flag
 
     def get_kernel_type(self):
         return self.kernel.kernel_type

@@ -428,8 +428,6 @@ class Deformetrica:
         template_specifications, model_options, estimator_options = self.further_initialization(
             'DeterministicAtlas', template_specifications, model_options, dataset_specifications, estimator_options)
 
-        logger.info(estimator_options)
-
         # Instantiate dataset.
         dataset = {'target': target_vol, 'subject_size': data_sizes, 'number_of_subjects': len(target_vol),
                    'subject_ids': dataset_specifications['subject_ids']}

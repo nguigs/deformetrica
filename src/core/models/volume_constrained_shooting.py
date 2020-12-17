@@ -310,4 +310,5 @@ class VolumeConstrainedShooting(DeterministicAtlas):
         return residuals
 
     def _write_model_parameters(self, output_dir):
-        write_2D_list(np.stack([self.get_intercept(), self.get_size_effect()]), output_dir, 'scaling_parameters.txt')
+        write_2D_list(
+            np.stack([self.get_intercept(), self.get_size_effect()]), output_dir, 'scaling_parameters.txt', mode='a')

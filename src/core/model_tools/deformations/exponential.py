@@ -341,7 +341,7 @@ class Exponential:
                 initial_shape = landmark_points[i].clone().detach().requires_grad_(True)
                 deformed_volume = self._volume(tensor=initial_shape)
                 deformed_volume.backward()
-                grad_star = initial_shape.grad.detach() / 1000
+                grad_star = initial_shape.grad.detach() / deformed_volume.detach() * 100
                 d_pos = - self.kernel.convolve(initial_shape, initial_shape, grad_star)
 
                 landmark_points.append(landmark_points[i] + dt * d_pos)

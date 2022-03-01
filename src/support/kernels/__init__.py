@@ -7,11 +7,13 @@ from support.kernels.abstract_kernel import AbstractKernel
 class Type(Enum):
     from support.kernels.torch_kernel import TorchKernel
     from support.kernels.keops_kernel import KeopsKernel
+    from support.kernels.polynomial_torch_kernel import PolynomialKernel
 
     UNDEFINED = None
     NO_KERNEL = None
     TORCH = TorchKernel
     KEOPS = KeopsKernel
+    POLYNOMIAL = PolynomialKernel
 
 
 instance_map = dict()

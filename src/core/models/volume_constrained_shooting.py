@@ -90,6 +90,10 @@ class VolumeConstrainedShooting(DeterministicAtlas):
         reader.SetFileName(template_specifications['shape']['filename'])
         reader.Update()
         self.polydata = reader.GetOutput()
+        if dimension == 3:
+            self.volume = self.volume_mesh
+        else:
+            self.volume = self.area
 
     # Full fixed effects -----------------------------------------------------------------------------------------------
     def set_intercept(self, inter):
@@ -169,6 +173,7 @@ class VolumeConstrainedShooting(DeterministicAtlas):
         # Deform.
         exponential.set_initial_template_points(template_points)
         scaling = intercept + size_effect * subject_size
+        scaling = - scaling if scaling < 0. else scaling
         if self.gradient_flow:
             exponential.volume_gradient_flow(end_time=scaling)
         else:
@@ -181,8 +186,8 @@ class VolumeConstrainedShooting(DeterministicAtlas):
         deformed_points = exponential.get_template_points()
         deformed_data = template.get_deformed_data(deformed_points, template_data)
         deformed_volume = self.volume(tensor=deformed_data['landmark_points'])
-        attachment = -((deformed_volume - target_size) / 1000) ** 2 / self.number_of_subjects
-        regularity = - self.regularization * (1. - scaling[0]) ** 2
+        attachment = - (deformed_volume - target_size) ** 2 / self.number_of_subjects
+        regularity = - self.regularization * ((1. - scaling[0]) ** 2 + min(0., scaling[0]) ** 2 )
 
         assert torch.device(
             device) == attachment.device == regularity.device, 'attachment and regularity tensors must be on the same device. ' \
@@ -210,7 +215,12 @@ class VolumeConstrainedShooting(DeterministicAtlas):
 
         return res
 
-    def volume(self, tensor):
+    @staticmethod
+    def area(tensor):
+        tmp = torch.cat([tensor, tensor[0][None, :]])
+        return torch.sum(tmp[:-1, 0] * tmp[1:, 1] - tmp[1:, 0] * tmp[:-1, 1]) / 2
+
+    def volume_mesh(self, tensor):
         polydata = self.polydata
         n = polydata.GetNumberOfCells()
         vol = 0
@@ -221,7 +231,7 @@ class VolumeConstrainedShooting(DeterministicAtlas):
             p2 = cell.GetPointId(2)
             triangle = torch.stack([tensor[p0], tensor[p1], tensor[p2]])
             vol += triangle.det() / 6
-        return vol
+        return vol / 1000
 
     def _fixed_effects_to_torch_tensors(self, with_grad, device='cpu'):
         """

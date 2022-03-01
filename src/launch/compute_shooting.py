@@ -32,6 +32,7 @@ def compute_shooting(template_specifications,
                      t0=None, tmin=default.tmin, tmax=default.tmax, dense_mode=default.dense_mode,
                      number_of_time_points=default.number_of_time_points,
                      use_rk2_for_shoot=default.use_rk2_for_shoot,
+                     use_rk4_for_shoot=False,
                      use_rk2_for_flow=default.use_rk2_for_flow,
                      gpu_mode=default.gpu_mode, preserve_volume=False,
                      output_dir=default.output_dir, use_svf=False,
@@ -89,7 +90,8 @@ def compute_shooting(template_specifications,
         geodesic = Geodesic(dense_mode=dense_mode, use_svf=use_svf, preserve_volume=preserve_volume,
                         concentration_of_time_points=concentration_of_time_points, t0=t0,
                         kernel=deformation_kernel, shoot_kernel_type=shoot_kernel_type, polydata=polydata,
-                        use_rk2_for_shoot=use_rk2_for_shoot, use_rk2_for_flow=use_rk2_for_flow)
+                        use_rk2_for_shoot=use_rk2_for_shoot, use_rk2_for_flow=use_rk2_for_flow,
+                            use_rk4_for_shoot=use_rk4_for_shoot)
 
     if t0 is None:
         logger.warning('Defaulting geodesic t0 to 1.')

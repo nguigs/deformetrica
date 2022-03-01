@@ -73,7 +73,7 @@ class Exponential:
         self.use_rk2_for_flow = use_rk2_for_flow
 
         self.use_svf = use_svf
-        if polydata is not None:
+        if polydata is not None and preserve_volume:
             self.triangles = self._get_triangle_mask(polydata)
         self.preserve_volume = preserve_volume
 
@@ -459,8 +459,10 @@ class Exponential:
             renormalized_momenta = approx_momenta * renormalization_factor
 
             if abs(renormalization_factor.detach().cpu().numpy() - 1.) > 0.1:
-                raise ValueError('Absurd required renormalization factor during parallel transport: %.4f. '
-                                 'Exception raised.' % renormalization_factor.detach().cpu().numpy())
+                logger.warning('Absurd required renormalization factor during parallel transport: %.4f. '
+                                'Exception raised.' % renormalization_factor.detach().cpu().numpy())
+                # raise ValueError('Absurd required renormalization factor during parallel transport: %.4f. '
+                #                  'Exception raised.' % renormalization_factor.detach().cpu().numpy())
             elif abs(renormalization_factor.detach().cpu().numpy() - 1.) > abs(worst_renormalization_factor - 1.):
                 worst_renormalization_factor = renormalization_factor.detach().cpu().numpy()
 

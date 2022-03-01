@@ -12,7 +12,10 @@ from in_out.image_functions import points_to_voxels_transform, metric_to_image_r
 def initialize_control_points(initial_control_points, template, spacing, deformation_kernel_width,
                               dimension, dense_mode):
     if initial_control_points is not None:
-        control_points = read_2D_array(initial_control_points)
+        try:
+            control_points = read_2D_array(initial_control_points)
+        except ValueError:
+            control_points = read_3D_array(initial_control_points)[0]
         logger.info('>> Reading %d initial control points from file %s.' % (len(control_points), initial_control_points))
 
     else:

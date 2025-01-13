@@ -111,7 +111,7 @@ class ScipyOptimize(AbstractEstimator):
                                   })
                 grad_norm = np.sum(result['jac'] ** 2)
                 logger.info('>> Gradient at Termination: {}'.format(grad_norm))
-                msg = result.message.decode("utf-8")
+                msg = result.message
                 if msg == 'ABNORMAL_TERMINATION_IN_LNSRCH':
                     logger.info('>> Number of line search loops exceeded. Stopping.')
 

@@ -241,7 +241,7 @@ def compute_pole_ladder(tensor_scalar_type=default.tensor_scalar_type,
         velocity = utilities.move_data(velocity, dtype=tensor_scalar_type, device='cpu')  # TODO: could this be done on gpu ?
         kernel_matrix = utilities.move_data(kernel_matrix, dtype=tensor_scalar_type, device='cpu')  # TODO: could this be done on gpu ?
 
-        cholesky_kernel_matrix = torch.cholesky(kernel_matrix)
+        cholesky_kernel_matrix = torch.linalg.cholesky(kernel_matrix)
         # cholesky_kernel_matrix = torch.Tensor(np.linalg.cholesky(kernel_matrix.data.numpy()).type_as(kernel_matrix))#Dirty fix if pytorch fails.
         projected_momenta = torch.cholesky_solve(velocity, cholesky_kernel_matrix).squeeze().contiguous()
 

@@ -658,7 +658,7 @@ class Exponential:
             grad = mom_.grad.detach().cpu()
             return loss.detach().cpu(), grad.numpy().flatten()
 
-        init_mom = torch.rand(*torch.flatten(x).shape).numpy()
+        init_mom = torch.rand(*torch.flatten(x).shape, dtype=torch.float64).numpy()
         res = minimize(
             loss_and_grad, init_mom, method='L-BFGS-B', jac=True,
             options={'disp': False, 'maxiter': 50}, tol=1e-14)

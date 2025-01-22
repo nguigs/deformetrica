@@ -167,7 +167,7 @@ def get_best_device(gpu_mode=GpuMode.AUTO):
     """
     assert gpu_mode is not None
     assert isinstance(gpu_mode, GpuMode)
-    use_cuda = False
+    use_cuda = True
     if gpu_mode in [GpuMode.AUTO]:
         # TODO this should be more clever
         use_cuda = torch.cuda.is_available()

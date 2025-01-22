@@ -59,6 +59,7 @@ class Spline(Geodesic):
         if self.shoot_is_modified or self.flow_is_modified:
 
             device, _ = utilities.get_best_device(self.backward_exponential.kernel.gpu_mode)
+            self.external_forces = self.external_forces.to(device)
 
             # Backward exponential -------------------------------------------------------------------------------------
             length = self.t0 - self.tmin

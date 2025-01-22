@@ -59,7 +59,7 @@ class TorchKernel(AbstractKernel):
         else:
             raise RuntimeError('Unknown kernel mode.')
 
-        return res.cpu() if self.gpu_mode is GpuMode.KERNEL else res
+        return res#.cpu() if self.gpu_mode is GpuMode.KERNEL else res
 
     def convolve_gradient(self, px, x, y=None, py=None):
         if y is None:
@@ -80,7 +80,7 @@ class TorchKernel(AbstractKernel):
         B = self._differences(x, y) * A
 
         res = (- 2 * torch.sum(px * (torch.matmul(B, py)), 2) / (self.kernel_width ** 2)).t()
-        return res.cpu() if self.gpu_mode is GpuMode.KERNEL else res
+        return res#.cpu() if self.gpu_mode is GpuMode.KERNEL else res
 
     ####################################################################################################################
     ### Auxiliary methods:

@@ -649,7 +649,7 @@ class Exponential:
 
         def loss_and_grad(mom):
             if isinstance(mom, np.ndarray):
-                mom = torch.from_numpy(mom)
+                mom = torch.from_numpy(mom).to(device=x.device)
             mom = mom.reshape(x.shape)
             mom_ = mom.clone().detach().requires_grad_(True)
             shoot = cls.rk4_step(kernel, x, mom_, h, return_mom=False)
@@ -663,7 +663,7 @@ class Exponential:
             loss_and_grad, init_mom, method='L-BFGS-B', jac=True,
             options={'disp': False, 'maxiter': 50}, tol=1e-14)
 
-        tangent_vec = torch.Tensor(res.x).reshape(x.shape)
+        tangent_vec = torch.Tensor(res.x).reshape(x.shape).to(device=x.device)
         return tangent_vec
 
     @staticmethod

@@ -306,7 +306,7 @@ def compute_pole_ladder(tensor_scalar_type=default.tensor_scalar_type,
 
     # write results:
     write_3D_array(transported_mom.detach().cpu().numpy(), output_dir, "transported_momenta.txt")
-    write_2D_array(final_cp, output_dir, "final_cp.txt")
+    write_2D_array(final_cp.cpu().numpy(), output_dir, "final_cp.txt")
     return final_cp, transported_mom
 
 
